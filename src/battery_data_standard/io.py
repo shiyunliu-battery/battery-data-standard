@@ -777,8 +777,6 @@ def find_header_line(text: str) -> int:
     lines = text.splitlines()
     if not lines:
         return 0
-    best_idx = 0
-    best_score = -1
     header_tokens = (
         "time",
         "test",
@@ -793,8 +791,17 @@ def find_header_line(text: str) -> int:
         "电流",
         "时间",
     )
+    section_header = _data_section_header_index(lines, header_tokens)
+    if section_header is not None:
+        return section_header
+
+    best_idx = 0
+    best_score = -1
     for idx, line in enumerate(lines[:200]):
-        if not line.strip():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _looks_like_section_marker(stripped):
             continue
         lower = line.lower()
         if "~time[h]" in lower and "u[v]" in lower and "i[a]" in lower:
@@ -802,13 +809,40 @@ def find_header_line(text: str) -> int:
         if "time stamp" in lower and "step time" in lower and "voltage" in lower and "current" in lower:
             return idx
         delimiter = infer_delimiter(line)
-        cells = [c.strip().lower() for c in next(csv.reader([line], delimiter=delimiter))]
-        score = sum(1 for cell in cells for token in header_tokens if token in cell)
-        score += line.count(delimiter)
+        score = _header_token_score(line, delimiter, header_tokens)
+        if delimiter != " ":
+            score += line.count(delimiter)
         if score > best_score:
             best_score = score
             best_idx = idx
     return best_idx
+
+
+def _data_section_header_index(lines: list[str], header_tokens: tuple[str, ...]) -> int | None:
+    for idx, line in enumerate(lines[:500]):
+        if line.strip().lower() != "[data]":
+            continue
+        for candidate in range(idx + 1, min(len(lines), idx + 20)):
+            stripped = lines[candidate].strip()
+            if not stripped or _looks_like_section_marker(stripped):
+                continue
+            delimiter = infer_delimiter(lines[candidate])
+            if _header_token_score(lines[candidate], delimiter, header_tokens) >= 3:
+                return candidate
+    return None
+
+
+def _looks_like_section_marker(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("[") and stripped.endswith("]")
+
+
+def _header_token_score(line: str, delimiter: str, header_tokens: tuple[str, ...]) -> int:
+    try:
+        cells = [c.strip().lower() for c in next(csv.reader([line], delimiter=delimiter))]
+    except csv.Error:
+        return 0
+    return sum(1 for cell in cells for token in header_tokens if token in cell)
 
 
 def write_dataframe(df: pl.DataFrame, path: str | Path, *, fmt: str | None = None) -> None:

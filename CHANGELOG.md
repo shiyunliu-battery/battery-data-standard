@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 - 2026-05-27
+
+- Improved CSV header detection for Novonix exports that place protocol and
+  step-limit sections before the `[Data]` table.
+- Preserved Novonix attribution for files with `Date and Time`, `Run Time (h)`,
+  `Step Time (h)`, `Current (A)`, and `Potential (V)` columns after a structured
+  preamble.
+
 ## 0.1.0 - 2026-05-01
 
 - Published the initial public package for BDF-oriented battery cycler data conversion.
