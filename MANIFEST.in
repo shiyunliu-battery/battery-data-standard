@@ -1,0 +1,18 @@
+include README.md
+include LICENSE
+include NOTICE.md
+include CHANGELOG.md
+include SECURITY.md
+exclude CONTRIBUTING.md
+include docs/index.md
+include docs/api-reference.md
+include docs/supported-formats.md
+include docs/export-template.md
+include docs/schema-compatibility.md
+recursive-include src/battery_data_standard py.typed
+recursive-include src/bds py.typed
+prune tests
+prune tools
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store
