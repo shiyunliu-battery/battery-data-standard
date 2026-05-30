@@ -98,6 +98,9 @@ def detect_kind(path: str | Path, *, sheet: str | int | None = None) -> DataKind
         neware_excel_kind = _detect_neware_excel_kind(input_path, sheet=sheet)
         if neware_excel_kind is not None:
             return neware_excel_kind
+        eis_excel_kind = _detect_eis_excel_kind(input_path, sheet=sheet)
+        if eis_excel_kind is not None:
+            return eis_excel_kind
 
     try:
         result = read_table_with_metadata(input_path, options={"sheet": sheet})
@@ -241,6 +244,46 @@ def _detect_neware_excel_kind(path: Path, *, sheet: str | int | None) -> DataKin
             {"auxiliary_sheets": auxiliary_sheets},
         )
     return None
+
+
+def _detect_eis_excel_kind(path: Path, *, sheet: str | int | None) -> DataKindResult | None:
+    try:
+        if path.suffix.lower() == ".xlsx":
+            sheet_names = xlsx_sheet_names(path)
+        else:
+            import pandas as pd
+
+            sheet_names = [str(name) for name in pd.ExcelFile(path).sheet_names]
+    except Exception:
+        return None
+
+    if sheet is not None:
+        selected = str(sheet)
+        if _is_eis_sheet(selected):
+            return DataKindResult(
+                "eis",
+                0.9,
+                "EIS worksheet detected",
+                str(path),
+                {"selected_sheets": [selected]},
+            )
+        return None
+
+    eis_sheets = [name for name in sheet_names if _is_eis_sheet(name)]
+    if not eis_sheets:
+        return None
+    return DataKindResult(
+        "eis",
+        0.9,
+        "EIS worksheet detected",
+        str(path),
+        {"selected_sheets": eis_sheets},
+    )
+
+
+def _is_eis_sheet(name: str) -> bool:
+    clean = str(name).strip().lower()
+    return clean.startswith("acim") or "impedance" in clean or clean in {"eis", "eis data"}
 
 
 def _is_neware_detail_sheet(name: str) -> bool:

@@ -36,6 +36,32 @@ Use `cycler="auto"` or `cycler=None` for automatic detection. Use an explicit
 cycler id such as `neware`, `arbin`, `maccor`, `biologic`, `novonix`,
 `basytec`, `landt`, or `generic` when the source system is known.
 
+`read()` returns the internal canonical dataframe, with labels such as
+`Test Time / s`. To display or save the user-facing export labels defined in the
+export template, use:
+
+```python
+from battery_data_standard.export import to_export_frame
+
+export_df = to_export_frame(df)
+```
+
+For real experimental datasets, preserve the raw instrument current sign and
+repair documented time-axis issues with:
+
+```python
+df = bds.read(
+    path,
+    cycler="auto",
+    current_sign="preserve",
+    repair_policy="repair",
+)
+```
+
+`current_sign="preserve"` keeps the source file's current sign convention.
+`repair_policy="repair"` applies documented repairs such as shifting
+`Test Time / s` to start at zero.
+
 ### `read_with_report`
 
 ```python

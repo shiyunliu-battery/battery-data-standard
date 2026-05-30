@@ -47,9 +47,12 @@ def sample_text(path: str | Path, limit: int = 65536) -> str:
     path = Path(path)
     if path.suffix.lower() == ".xlsx":
         try:
-            return "\n".join(xlsx_sheet_names(path))[:limit]
+            return sample_xlsx(path, limit=limit)
         except Exception:
-            pass
+            try:
+                return "\n".join(xlsx_sheet_names(path))[:limit]
+            except Exception:
+                pass
     if path.suffix.lower() == ".xls":
         try:
             workbook = pd.ExcelFile(path)
@@ -97,6 +100,37 @@ def xlsx_sheet_names(path: str | Path) -> list[str]:
             if name is not None:
                 names.append(str(name))
     return names
+
+
+def sample_xlsx(path: str | Path, *, limit: int = 65536) -> str:
+    """Return sheet names plus a small worksheet-cell sample for adapter detection."""
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise UnsupportedFeatureError("Excel .xlsx sampling requires openpyxl.") from exc
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    try:
+        parts: list[str] = []
+        for worksheet in workbook.worksheets[:5]:
+            parts.append(str(worksheet.title))
+            max_row = min(int(worksheet.max_row or 0), 20)
+            max_col = min(int(worksheet.max_column or 0), 50)
+            for row in worksheet.iter_rows(
+                min_row=1,
+                max_row=max_row,
+                max_col=max_col,
+                values_only=True,
+            ):
+                if not any(value is not None for value in row):
+                    continue
+                parts.append("\t".join("" if value is None else str(value) for value in row))
+            text = "\n".join(parts)
+            if len(text) >= limit:
+                return text[:limit]
+        return "\n".join(parts)[:limit]
+    finally:
+        workbook.close()
 
 
 def read_table(
@@ -258,6 +292,28 @@ def read_excel_with_metadata(
             },
         )
 
+    sheet_names = _excel_sheet_names(path)
+    preferred_sheet = _preferred_excel_sheet_name(sheet_names, sheet_policy=sheet_policy)
+    if preferred_sheet is not None:
+        df = pd.read_excel(path, sheet_name=preferred_sheet)
+        df, excel_header_row = _prepare_excel_dataframe(df)
+        frame = _pandas_to_polars(df)
+        frame = _drop_unit_row(frame)
+        frame = _apply_positional_columns(frame)
+        return TableReadResult(
+            frame,
+            {
+                "source_format": path.suffix.lower().lstrip("."),
+                "backend": "pandas",
+                "sheet_names": sheet_names,
+                "selected_sheets": [preferred_sheet],
+                "sheet_name": preferred_sheet,
+                "excel_header_row": excel_header_row,
+                "raw_rows": frame.height,
+                "raw_columns": list(frame.columns),
+            },
+        )
+
     sheets = pd.read_excel(path, sheet_name=None)
     frames: list[tuple[str, pd.DataFrame]] = []
     for name, df in sheets.items():
@@ -276,7 +332,7 @@ def read_excel_with_metadata(
         )
 
     scored = [(name, df, _score_excel_sheet(df)) for name, df in frames]
-    selected = scored[0] if sheet_policy == "first" else _select_excel_sheet(path, scored)
+    selected = scored[0] if sheet_policy == "first" else _select_excel_sheet(path, scored, sheet_policy=sheet_policy)
     selected_df, excel_header_row = _prepare_excel_dataframe(selected[1])
     data = _pandas_to_polars(selected_df)
     data = _drop_unit_row(data)
@@ -296,11 +352,37 @@ def read_excel_with_metadata(
     )
 
 
+def _excel_sheet_names(path: Path) -> list[str]:
+    if path.suffix.lower() == ".xlsx":
+        return xlsx_sheet_names(path)
+    workbook = pd.ExcelFile(path)
+    return [str(name) for name in workbook.sheet_names]
+
+
+def _preferred_excel_sheet_name(sheet_names: list[str], *, sheet_policy: str) -> str | None:
+    if sheet_policy == "eis":
+        eis_sheets = [name for name in sheet_names if _is_eis_excel_sheet(name)]
+        return eis_sheets[0] if eis_sheets else None
+    if sheet_policy != "auto":
+        return None
+    channel_sheets = [name for name in sheet_names if _is_arbin_channel_sheet(name)]
+    return channel_sheets[0] if channel_sheets else None
+
+
 def _select_excel_sheet(
-    path: Path, scored: list[tuple[str, pd.DataFrame, int]]
+    path: Path, scored: list[tuple[str, pd.DataFrame, int]], *, sheet_policy: str = "auto"
 ) -> tuple[str, pd.DataFrame, int]:
     if len(scored) == 1:
         return scored[0]
+
+    if sheet_policy == "eis":
+        eis = [item for item in scored if _is_eis_excel_sheet(item[0])]
+        if len(eis) == 1:
+            return eis[0]
+
+    channel = [item for item in scored if _is_arbin_channel_sheet(item[0])]
+    if len(channel) == 1:
+        return channel[0]
 
     positive = [item for item in scored if item[2] > 0]
     candidates = positive or scored
@@ -339,6 +421,16 @@ def _score_header_values(values: Any) -> int:
     )
     text = " ".join(str(value).lower() for value in values if not pd.isna(value))
     return sum(token in text for token in header_tokens)
+
+
+def _is_arbin_channel_sheet(name: str) -> bool:
+    clean = str(name).strip().lower()
+    return bool(re.match(r"^channel[_ -]?\d", clean))
+
+
+def _is_eis_excel_sheet(name: str) -> bool:
+    clean = str(name).strip().lower()
+    return clean.startswith("acim") or "impedance" in clean or clean in {"eis", "eis data"}
 
 
 def _prepare_excel_dataframe(df: pd.DataFrame) -> tuple[pd.DataFrame, int | None]:
@@ -496,27 +588,41 @@ def _flatten_matlab_value(name: str, value: Any, output: dict[str, Any], *, dept
         if squeezed.shape == ():
             _flatten_matlab_value(name, squeezed.item(), output, depth=depth + 1)
             return
-        for index, item in enumerate(squeezed.reshape(-1).tolist()):
+        items = squeezed.reshape(-1).tolist()
+        if all(_is_matlab_scalar_leaf(item) for item in items):
+            output[name] = squeezed
+            return
+        for index, item in enumerate(items):
             _flatten_matlab_value(f"{name}_{index}", item, output, depth=depth + 1)
         return
     output[name] = value
+
+
+def _is_matlab_scalar_leaf(value: Any) -> bool:
+    if hasattr(value, "_fieldnames"):
+        return False
+    import numpy as np
+
+    array = np.asarray(value)
+    return array.shape == ()
 
 
 def _matlab_vectors_to_frame(variables: dict[str, Any]) -> pl.DataFrame | None:
     import numpy as np
 
     aliases = {
-        "Time": ("time", "t", "test_time", "testtime", "seconds", "sec"),
-        "Voltage": ("voltage", "volt", "volts", "v", "ewe", "ecell"),
-        "Current": ("current", "curr", "i", "amps", "ampere"),
-        "Cycle": ("cycle", "cycle_index", "cycleid"),
-        "Step": ("step", "step_index", "stepid"),
+        "Time": ("time", "time_data", "test_time", "testtime", "seconds", "sec", "t"),
+        "Voltage": ("voltage", "voltage_data", "volt", "volts", "u", "v", "ewe", "ecell"),
+        "Current": ("current", "current_data", "cur", "cur_data", "curr", "i", "amps", "ampere"),
+        "Cycle": ("cycle", "cycle_index", "cycleindex", "cycleid"),
+        "Step": ("step", "step_index", "stepindex", "stepid"),
         "SOC": ("soc", "stateofcharge"),
-        "Temperature": ("temperature", "temp", "degc"),
+        "Temperature": ("temperature", "temperature_data", "temp", "temp_data", "degc"),
     }
+    alias_slugs = {label: tuple(_slug(alias) for alias in names) for label, names in aliases.items()}
     selected: dict[str, list[float | int | None]] = {}
     expected_length: int | None = None
-    for label, names in aliases.items():
+    for label, names in alias_slugs.items():
         for name, value in variables.items():
             slug = _slug(name)
             if slug not in names and not any(slug.endswith(alias) for alias in names):
@@ -550,12 +656,14 @@ def _matlab_paired_vectors_to_frame(variables: dict[str, Any]) -> pl.DataFrame |
         kind: str | None = None
         suffix = slug
         for prefix, label in (
-            ("cur", "Current"),
             ("current", "Current"),
-            ("volt", "Voltage"),
+            ("cur", "Current"),
             ("voltage", "Voltage"),
+            ("volt", "Voltage"),
             ("time", "Time"),
             ("t", "Time"),
+            ("temperature", "Temperature"),
+            ("temp", "Temperature"),
         ):
             if slug == prefix or slug.startswith(prefix):
                 kind = label

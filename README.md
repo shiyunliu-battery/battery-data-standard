@@ -100,6 +100,36 @@ import bds
 df = bds.read("raw_export.csv", cycler="auto")
 ```
 
+Show the user-facing export column names defined in the export template:
+
+```python
+from battery_data_standard.export import to_export_frame
+
+export_df = to_export_frame(df)
+print(export_df.columns)
+```
+
+### Preserve Raw Current Sign And Repair Time Axis
+
+For real experimental datasets, it is often useful to preserve the current sign
+exactly as recorded by the source file and allow repairable time-axis issues to
+be normalized:
+
+```python
+df = bds.read(
+    path,
+    cycler="auto",
+    current_sign="preserve",
+    repair_policy="repair",
+)
+```
+
+Use `current_sign="preserve"` when downstream analysis should keep the raw
+charge/discharge sign convention from the instrument. Use
+`repair_policy="repair"` when the pipeline accepts documented normalizations
+such as shifting `Test Time / s` to start at zero or sorting non-monotonic time
+values.
+
 Use an explicit cycler when the source format is known:
 
 ```python

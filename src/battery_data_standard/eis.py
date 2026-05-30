@@ -20,7 +20,7 @@ EIS_REQUIRED_COLUMNS = ("Frequency_Hz", "Zre_exp_Ohm", "Zim_exp_Ohm")
 def read_eis(path: str | Path, *, sheet: str | int | None = None) -> pl.DataFrame:
     """Read CSV/Excel-like EIS data into an eisfit-compatible table."""
     input_path = Path(path)
-    result = read_table_with_metadata(input_path, options={"sheet": sheet})
+    result = read_table_with_metadata(input_path, options={"sheet": sheet, "excel_sheets": "eis"})
     raw = _add_frequency_values_from_sibling(input_path, result.data)
     return normalize_eis_frame(raw)
 
@@ -115,6 +115,32 @@ def normalize_eis_frame(raw: pl.DataFrame) -> pl.DataFrame:
             "Freq",
         ),
     )
+    zmod_col = _find_column(
+        raw.columns,
+        (
+            "Zmod",
+            "Zmod_Ohm",
+            "Zmod (Ohm)",
+            "|Z|",
+            "|Z|/Ohm",
+            "|Z| (Ohm)",
+            "Magnitude",
+            "Magnitude_Ohm",
+            "Mod(Z)",
+        ),
+    )
+    phase_col = _find_column(
+        raw.columns,
+        (
+            "Zphz",
+            "Zphase",
+            "Zphase_deg",
+            "Phase",
+            "Phase(deg)",
+            "Phase (deg)",
+            "Phase_exp_deg",
+        ),
+    )
     zre_col = _find_column(
         raw.columns,
         (
@@ -158,6 +184,8 @@ def normalize_eis_frame(raw: pl.DataFrame) -> pl.DataFrame:
         ),
     )
     if freq_col is None or zre_col is None or zim_col is None:
+        if freq_col is not None and zmod_col is not None and phase_col is not None:
+            return _normalize_eis_magnitude_phase_frame(raw, freq_col, zmod_col, phase_col)
         raise ConversionError(
             "Could not infer EIS frequency, real impedance, and imaginary impedance columns. "
             f"Raw columns: {raw.columns}"
@@ -211,7 +239,51 @@ def looks_like_eis_columns(columns: list[str]) -> bool:
     has_imag = any(
         token in slug for slug in slugs for token in ("zim", "zimag", "imz", "imagohm", "impedancei", "xohm")
     ) or any("z''" in str(column).lower() for column in columns)
-    return has_freq and has_real and has_imag
+    has_magnitude = any(token in slug for slug in slugs for token in ("zmod", "modz", "magnitude"))
+    has_phase = any(token in slug for slug in slugs for token in ("zphz", "zphase", "phase"))
+    return has_freq and ((has_real and has_imag) or (has_magnitude and has_phase))
+
+
+def _normalize_eis_magnitude_phase_frame(
+    raw: pl.DataFrame, freq_col: str, zmod_col: str, phase_col: str
+) -> pl.DataFrame:
+    freq = _float_values(raw[freq_col])
+    zmod = _float_values(raw[zmod_col])
+    phase = _float_values(raw[phase_col])
+    phase_values = [value for value in phase if value is not None and math.isfinite(value)]
+    phase_in_degrees = bool(phase_values and max(abs(value) for value in phase_values) > (2 * math.pi))
+
+    rows: list[dict[str, Any]] = []
+    context_columns = [col for col in raw.columns if col not in {freq_col, zmod_col, phase_col}]
+    for index, (f_value, mag_value, phase_value) in enumerate(zip(freq, zmod, phase, strict=True)):
+        if (
+            f_value is None
+            or mag_value is None
+            or phase_value is None
+            or not math.isfinite(f_value)
+            or not math.isfinite(mag_value)
+            or not math.isfinite(phase_value)
+            or f_value <= 0
+        ):
+            continue
+        angle = math.radians(phase_value) if phase_in_degrees else phase_value
+        zre = mag_value * math.cos(angle)
+        zim = mag_value * math.sin(angle)
+        row: dict[str, Any] = {
+            "Frequency_Hz": f_value,
+            "Zre_exp_Ohm": zre,
+            "Zim_exp_Ohm": zim,
+            "-Zim_exp_Ohm": -zim,
+            "Phase_exp_deg": math.degrees(angle),
+        }
+        for column in context_columns:
+            if _looks_like_context(column):
+                row[column] = raw[column][index]
+        rows.append(row)
+
+    if not rows:
+        raise ConversionError("No valid EIS rows found after magnitude/phase normalization.")
+    return pl.DataFrame(rows).sort("Frequency_Hz", descending=True)
 
 
 def _add_frequency_values_from_sibling(path: Path, raw: pl.DataFrame) -> pl.DataFrame:

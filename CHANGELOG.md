@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2 - 2026-05-30
+
+- Documented how to preserve raw current sign and apply explicit time-axis
+  repairs for real experimental datasets.
+- Documented how to display user-facing export labels such as `Test Time (s)`,
+  `Voltage (V)`, and `Current (A)` from the internal normalized dataframe.
+- Added Arbin Excel workbook hardening so `Channel_*` sheets are preferred
+  over duplicate/raw `RawData_*` sheets during automatic time-series reading.
+- Added EIS Excel workbook hardening for Arbin/Gamry-style `ACIM_*` sheets
+  with `Freq`, `Zmod`, and `Zphz` magnitude/phase columns.
+- Added MATLAB vector mapping improvements for Novonix-style
+  `CurrentData`/`VoltageData`/`TimeData` files and struct fields such as
+  `Dataset.U` and `Dataset.I`.
+
 ## 0.1.1 - 2026-05-27
 
 - Improved CSV header detection for Novonix exports that place protocol and
