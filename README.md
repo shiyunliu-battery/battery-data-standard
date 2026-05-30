@@ -1,5 +1,10 @@
 # Battery Data Standard
 
+[![PyPI version](https://img.shields.io/pypi/v/battery-data-standard.svg)](https://pypi.org/project/battery-data-standard/)
+[![Python](https://img.shields.io/pypi/pyversions/battery-data-standard.svg)](https://pypi.org/project/battery-data-standard/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Package](https://img.shields.io/badge/package-bds-blue.svg)](https://pypi.org/project/battery-data-standard/)
+
 `battery-data-standard` is a Python library and command-line tool for converting
 battery cycler exports into a consistent BDF-style tabular representation. It is
 intended for laboratories, battery test teams, and data pipelines that need a
