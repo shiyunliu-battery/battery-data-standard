@@ -2,11 +2,9 @@
 
 ## 0.2.0 - 2026-06-01
 
-- Added BDS-native internal canonical fields with legacy BDF-compatible export kept behind `target="bdf"`.
 - Added export targets for DuckDB, Polars, cellpy, BEEP, PyBaMM, PyProBE, and Battery Archive workflows.
 - Added `bds audit` and API support for intake quality scoring across raw folders.
 - Added Repower and PEC adapters, BioLogic `.mpr` support through the optional `mpr` extra, and Gamry `.DTA` EIS reading.
-- Added public integration documentation and a Zenodo stack-pressure workbook notebook that uses repository-relative paths.
 - Lowered the supported Python floor to Python 3.10 and expanded CI coverage to Python 3.10 through 3.13.
 
 ## 0.1.2 - 2026-05-30
