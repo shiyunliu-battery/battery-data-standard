@@ -5,7 +5,7 @@ include CHANGELOG.md
 include SECURITY.md
 exclude CONTRIBUTING.md
 recursive-include docs *.md
-recursive-include examples/notebooks *.ipynb
+recursive-include examples/notebooks *.md
 recursive-include src/battery_data_standard py.typed
 recursive-include src/bds py.typed
 prune tests
