@@ -73,9 +73,9 @@ class Adapter:
         )
 
     def repair(self, data: pl.DataFrame, *, repair_policy: str = "warn") -> AdapterResult:
-        from .normalization import repair_bdf_frame
+        from .normalization import repair_bds_frame
 
-        df, warnings = repair_bdf_frame(data, policy=repair_policy)
+        df, warnings = repair_bds_frame(data, policy=repair_policy)
         return AdapterResult(df, warnings=warnings, metadata={"repair_operations": list(warnings)})
 
     def extract_metadata(self, raw: pl.DataFrame) -> dict[str, Any]:

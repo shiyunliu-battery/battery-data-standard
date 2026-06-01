@@ -21,13 +21,13 @@ class BasytecAdapter(GenericAdapter):
     raw_current_sign = "charge-positive"
     signatures = ("basytec", "run_time", "c_vol", "c_cur", "~time[h]", "u[v]", "i[a]")
     column_aliases = {
-        "Test Time / s": ("run_time", "time", "~Time[h]", "Time[h]", "Time[s]"),
-        "Step Time / s": ("t-Step[h]", "t-Set[h]"),
-        "Voltage / V": ("c_vol", "voltage", "U[V]", "U_Battery"),
-        "Current / A": ("c_cur", "current", "I[A]", "I_Battery"),
-        "Cycle Count / 1": ("Cyc-Count", "Cycle", "CycCount"),
-        "Step Count / 1": ("Line", "Step", "Command"),
-        "Ambient Temperature / degC": (
+        "test_time_s": ("run_time", "time", "~Time[h]", "Time[h]", "Time[s]"),
+        "step_time_s": ("t-Step[h]", "t-Set[h]"),
+        "voltage_v": ("c_vol", "voltage", "U[V]", "U_Battery"),
+        "current_a": ("c_cur", "current", "I[A]", "I_Battery"),
+        "cycle_index": ("Cyc-Count", "Cycle", "CycCount"),
+        "step_index": ("Line", "Step", "Command"),
+        "ambient_temperature_deg_c": (
             "c_temp",
             "c_surf_temp",
             "amb_temp",
@@ -35,8 +35,8 @@ class BasytecAdapter(GenericAdapter):
             "T1[°C]",
             "T1[癈]",
         ),
-        "Charging Capacity / Ah": ("ah_ch", "Ah[Ah]"),
-        "Discharging Capacity / Ah": ("ah_dch",),
+        "charge_capacity_ah": ("ah_ch", "Ah[Ah]"),
+        "discharge_capacity_ah": ("ah_dch",),
     }
 
     def read_raw_with_metadata(self, path: Path, options: dict[str, Any] | None = None) -> AdapterResult:

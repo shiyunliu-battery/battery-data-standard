@@ -28,7 +28,7 @@ class ArbinAdapter(GenericAdapter):
         "statisticbycycle",
     )
     column_aliases = {
-        "Test Time / s": (
+        "test_time_s": (
             "Test_Time",
             "Test Time (s)",
             "Test Time (min)",
@@ -37,8 +37,8 @@ class ArbinAdapter(GenericAdapter):
             "Test_Time(s)",
             "TestTime(s)",
         ),
-        "Date Time ISO": ("DateTime", "Date Time", "Date_Time", "Date_Time                    "),
-        "Step Time / s": (
+        "date_time": ("DateTime", "Date Time", "Date_Time", "Date_Time                    "),
+        "step_time_s": (
             "Step_Time",
             "Step Time (s)",
             "Step Time (min)",
@@ -46,28 +46,28 @@ class ArbinAdapter(GenericAdapter):
             "Step_Time(s)",
             "StepTime(s)",
         ),
-        "Cycle Count / 1": ("Cycle_Index", "Cycle Index"),
-        "Step Count / 1": ("Step_Index", "Step Index"),
-        "Step Index / 1": ("Data_Point", "Data Point", "DataPoint"),
-        "Current / A": ("Current", "Current (A)", "Current(A)", "Current_mA", "Current (mA)"),
-        "Voltage / V": ("Voltage", "Voltage (V)", "Voltage(V)"),
-        "Charging Capacity / Ah": ("Charge_Capacity", "Charge Capacity (Ah)", "Charge_Capacity(Ah)"),
-        "Discharging Capacity / Ah": (
+        "cycle_index": ("Cycle_Index", "Cycle Index"),
+        "step_index": ("Step_Index", "Step Index"),
+        "record_index": ("Data_Point", "Data Point", "DataPoint"),
+        "current_a": ("Current", "Current (A)", "Current(A)", "Current_mA", "Current (mA)"),
+        "voltage_v": ("Voltage", "Voltage (V)", "Voltage(V)"),
+        "charge_capacity_ah": ("Charge_Capacity", "Charge Capacity (Ah)", "Charge_Capacity(Ah)"),
+        "discharge_capacity_ah": (
             "Discharge_Capacity",
             "Discharge Capacity (Ah)",
             "Discharge_Capacity(Ah)",
         ),
-        "Charging Energy / Wh": ("Charge_Energy", "Charge Energy (Wh)", "Charge_Energy(Wh)"),
-        "Discharging Energy / Wh": ("Discharge_Energy", "Discharge Energy (Wh)", "Discharge_Energy(Wh)"),
-        "Power / W": ("Power", "Power (W)", "Power(W)"),
-        "Internal Resistance / ohm": (
+        "charge_energy_wh": ("Charge_Energy", "Charge Energy (Wh)", "Charge_Energy(Wh)"),
+        "discharge_energy_wh": ("Discharge_Energy", "Discharge Energy (Wh)", "Discharge_Energy(Wh)"),
+        "power_w": ("Power", "Power (W)", "Power(W)"),
+        "internal_resistance_ohm": (
             "Internal_Resistance",
             "Internal Resistance",
             "Internal Resistance (Ohm)",
             "ACR (Ohm)",
             "IR (Ohms)",
         ),
-        "Ambient Temperature / degC": (
+        "ambient_temperature_deg_c": (
             "Temperature",
             "Aux_Temperature_1 (C)",
             "Aux_Temperature_1(C)",

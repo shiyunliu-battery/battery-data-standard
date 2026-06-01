@@ -7,29 +7,29 @@ from pathlib import Path
 from typing import Any
 
 from .exceptions import UnsupportedFeatureError, UnsupportedFormatError
-from .schema import ALL_COLUMNS, MACHINE_TO_LABEL
+from .schema import ALL_COLUMNS, MACHINE_TO_LABEL, canonical_label_for
 
 FIELD_TO_CANONICAL = {
-    "test_time": "Test Time / s",
-    "time": "Test Time / s",
-    "date_time": "Date Time ISO",
-    "date_time_iso": "Date Time ISO",
-    "cycle_index": "Cycle Count / 1",
-    "cycle": "Cycle Count / 1",
-    "step_index": "Step Count / 1",
-    "step": "Step Count / 1",
-    "data_point": "Step Index / 1",
-    "record": "Step Index / 1",
-    "step_time": "Step Time / s",
-    "voltage": "Voltage / V",
-    "current": "Current / A",
-    "temperature": "Ambient Temperature / degC",
-    "internal_resistance": "Internal Resistance / ohm",
-    "charge_capacity": "Charging Capacity / Ah",
-    "discharge_capacity": "Discharging Capacity / Ah",
-    "charge_energy": "Charging Energy / Wh",
-    "discharge_energy": "Discharging Energy / Wh",
-    "power": "Power / W",
+    "test_time": "test_time_s",
+    "time": "test_time_s",
+    "date_time": "date_time",
+    "date_time_iso": "date_time",
+    "cycle_index": "cycle_index",
+    "cycle": "cycle_index",
+    "step_index": "step_index",
+    "step": "step_index",
+    "data_point": "record_index",
+    "record": "record_index",
+    "step_time": "step_time_s",
+    "voltage": "voltage_v",
+    "current": "current_a",
+    "temperature": "ambient_temperature_deg_c",
+    "internal_resistance": "internal_resistance_ohm",
+    "charge_capacity": "charge_capacity_ah",
+    "discharge_capacity": "discharge_capacity_ah",
+    "charge_energy": "charge_energy_wh",
+    "discharge_energy": "discharge_energy_wh",
+    "power": "power_w",
 }
 
 
@@ -80,4 +80,7 @@ def _canonicalize_key(key: str) -> str | None:
         return key
     if key in MACHINE_TO_LABEL:
         return MACHINE_TO_LABEL[key]
+    alias = canonical_label_for(key)
+    if alias is not None:
+        return alias
     return FIELD_TO_CANONICAL.get(key.strip().lower())

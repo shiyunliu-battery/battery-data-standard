@@ -12,6 +12,8 @@ from .biologic import BiologicAdapter
 from .landt import LandtAdapter
 from .maccor import MaccorAdapter
 from .novonix import NovonixAdapter
+from .pec import PecAdapter
+from .repower import RepowerAdapter
 
 __all__ = [
     "ArbinAdapter",
@@ -20,4 +22,6 @@ __all__ = [
     "LandtAdapter",
     "MaccorAdapter",
     "NovonixAdapter",
+    "PecAdapter",
+    "RepowerAdapter",
 ]

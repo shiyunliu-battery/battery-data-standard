@@ -1,0 +1,4 @@
+Cycle Number,Step Number,Test Time (s),Step Time (s),Potential (V),Current (A),Temperature (°C)
+1,1,0,0,3.30,0.10,25
+1,1,10,10,3.31,0.10,25
+1,2,20,0,3.32,-0.10,25

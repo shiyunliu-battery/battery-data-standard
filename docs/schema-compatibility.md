@@ -1,14 +1,16 @@
 # Schema Compatibility
 
-The package exports the active schema identifier as `BDF_SCHEMA_VERSION`.
+The package exports the active schema identifier as `BDS_SCHEMA_VERSION`.
 
 ```python
 import bds
 
-print(bds.BDF_SCHEMA_VERSION)
+print(bds.BDS_SCHEMA_VERSION)
 ```
 
 The current schema identifier is also included in every `ConversionReport`.
+`BDF_SCHEMA_VERSION` remains available as a legacy compatibility constant for
+older integrations.
 
 ## Compatibility Policy
 
@@ -21,23 +23,23 @@ During the pre-1.0 beta period:
   before production rollout;
 - breaking schema changes should be documented in `CHANGELOG.md`.
 
-## Required Canonical Columns
+## Required BDS Export Columns
 
-BDF time-series data requires:
+Default BDS time-series exports require:
 
 | Column | Unit | Meaning |
 | --- | --- | --- |
-| `Test Time / s` | s | Elapsed test time. |
-| `Voltage / V` | V | Instantaneous voltage. |
-| `Current / A` | A | Instantaneous current. |
+| `Test Time (s)` | s | Elapsed test time. |
+| `Voltage (V)` | V | Instantaneous voltage. |
+| `Current (A)` | A | Instantaneous current. |
 
-Optional canonical columns include absolute time, cycle count, step count, step
+Optional BDS export columns include absolute time, cycle count, step count, step
 time, capacity, energy, temperature, power, and internal resistance.
 
 ## Export Labels
 
-Internal normalized data uses canonical labels such as `Test Time / s`. Written
-CSV and Parquet outputs use user-facing labels such as `Test Time (s)`.
+Written CSV and Parquet outputs use user-facing labels such as `Test Time (s)`.
+Lower-level adapter labels are treated as implementation details.
 
 See [export-template.md](export-template.md) for the export column order and
 mapping.

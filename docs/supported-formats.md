@@ -8,10 +8,12 @@ all historical cycler software versions.
 
 | Cycler id | Display name | Input suffixes | Unsupported suffixes | Support tier | Scope |
 | --- | --- | --- | --- | --- | --- |
-| `neware` | NEWARE | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common NEWARE tabular exports, including flat files and workbook-style data where columns can be mapped to BDF time-series fields. |
+| `neware` | NEWARE | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common NEWARE tabular exports, including flat files and workbook-style data where columns can be mapped to canonical time-series fields. |
 | `arbin` | Arbin | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common Arbin tabular exports and charge-positive current convention handling. |
 | `maccor` | Maccor | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common Maccor tabular exports, including files with metadata preambles. |
-| `biologic` | BioLogic | `.mpt`, `.txt`, `.csv` | `.mpr` | `fixture-backed` | EC-Lab text exports. Binary `.mpr` files are not supported. |
+| `biologic` | BioLogic | `.mpt`, `.mpr`, `.txt`, `.csv` | none declared | `fixture-backed` | EC-Lab text exports plus binary `.mpr` through the optional `mpr` extra (`galvani`). |
+| `repower` | Repower | `.csv`, `.txt` | none declared | `fixture-backed` | Repower CSV-style exports with `Relative Time`, `Voltage(V)`, `Current(A)`, cycle, step, and status columns. |
+| `pec` | PEC | `.csv`, `.txt` | none declared | `fixture-backed` | PEC CSV-style exports with total/step time, voltage/current, cycle/step, capacity, energy, and resistance columns. |
 | `novonix` | Novonix | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common Novonix tabular exports. |
 | `basytec` | BaSyTec | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common BaSyTec tabular exports. |
 | `landt` | LANDT | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common LANDT tabular exports. |
@@ -55,14 +57,16 @@ Supported generic families include:
 
 ## EIS Inputs
 
-EIS routing is separate from BDF time-series conversion. Use `detect-kind`,
+EIS routing is separate from time-series conversion. Use `detect-kind`,
 `convert-eis`, `read_eis()`, or `batch_convert()` for EIS files.
+
+Supported EIS input families include CSV/Excel impedance tables and Gamry
+`.DTA` files containing a `ZCURVE` table.
 
 ## Unsupported Inputs
 
 Known unsupported inputs include:
 
-- BioLogic `.mpr` binary files;
 - helper files such as README files, labels, procedures, datasheets, and summary
   tables that do not contain raw time-series or EIS data;
 - files without enough information to map time, voltage, and current columns.

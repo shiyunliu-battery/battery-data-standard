@@ -18,13 +18,23 @@ from .eis import convert_eis as _convert_eis
 from .eis import read_eis as _read_eis
 from .eis import validate_eis as _validate_eis
 from .exceptions import BatteryDataStandardError, ConversionError, FileIOError, ValidationFailed
-from .export import EXPORT_FORMAT_VERSION, looks_like_export_frame, to_export_frame, validate_export_frame
-from .io import read_bdf_like, write_dataframe, write_json, write_jsonl
+from .export import (
+    EXPORT_FORMAT_VERSION,
+    looks_like_export_frame,
+    normalize_export_target,
+    output_suffix_for_target,
+    to_export_frame,
+    validate_export_frame,
+)
+from .export import (
+    list_export_targets as _list_export_targets,
+)
+from .io import read_bds_like, write_dataframe, write_json, write_jsonl
 from .kind import DataKindResult
 from .kind import detect_kind as _detect_kind
 from .profiles import load_profile
 from .reports import ConversionReport, DetectionResult, ValidationReport
-from .schema import BDF_SCHEMA_VERSION
+from .schema import BDS_SCHEMA_VERSION
 from .validation import validate
 
 logger = logging.getLogger(__name__)
@@ -32,6 +42,10 @@ logger = logging.getLogger(__name__)
 
 def list_supported_formats() -> list[dict[str, object]]:
     return adapter_metadata()
+
+
+def list_export_targets() -> list[dict[str, str]]:
+    return _list_export_targets()
 
 
 def group_neware_files(paths: list[str | Path]) -> list[dict[str, Any]]:
@@ -45,7 +59,7 @@ def detect(path: str | Path) -> DetectionResult:
     Parameters
     ----------
     path:
-        Raw cycler export or BDF-like file to inspect.
+        Raw cycler export or normalized file to inspect.
 
     Returns
     -------
@@ -61,7 +75,7 @@ def detect(path: str | Path) -> DetectionResult:
 
 
 def detect_kind(path: str | Path, *, sheet: str | int | None = None) -> DataKindResult:
-    """Detect whether a file is BDF time-series, EIS, unsupported, or unknown."""
+    """Detect whether a file is time-series, EIS, unsupported, or unknown."""
     input_path = Path(path)
     _ensure_input_file(input_path)
     return _detect_kind(input_path, sheet=sheet)
@@ -90,7 +104,7 @@ def read(
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
 ) -> pl.DataFrame:
-    """Read a raw cycler export into a normalized BDF-style dataframe.
+    """Read a raw cycler export into a normalized dataframe.
 
     This is the primary library entry point. Use ``read_with_report`` when
     conversion warnings, provenance, and metadata are needed alongside the
@@ -156,7 +170,7 @@ def read_with_report(
         options = {"sheet": sheet}
         detection = detect_adapter(input_path)
         if cycler is None or cycler == "auto":
-            adapter, result = _auto_process_bdf(
+            adapter, result = _auto_process_timeseries(
                 input_path,
                 detection=detection,
                 profile=profile_data,
@@ -191,7 +205,7 @@ def read_with_report(
         input_path=str(input_path),
         output_path=None,
         cycler=adapter.id,
-        schema_version=BDF_SCHEMA_VERSION,
+        schema_version=BDS_SCHEMA_VERSION,
         rows=result.data.height,
         columns=list(result.data.columns),
         validation=validation,
@@ -228,8 +242,9 @@ def convert(
     report_path: str | Path | None = None,
     write_sidecars: bool = False,
     sheet: str | int | None = None,
+    target: str = "bds",
 ) -> ConversionReport:
-    """Convert a raw cycler export and write a BDF-style CSV or Parquet file.
+    """Convert a raw cycler export and write a normalized CSV or Parquet file.
 
     Parameters are the same as ``read_with_report`` with additional output,
     metadata, report, and sidecar controls.
@@ -252,7 +267,7 @@ def convert(
     )
     output_path = Path(output_path)
     logger.info("writing converted data input=%s output=%s format=%s", input_path, output_path, format)
-    export_df = to_export_frame(df)
+    export_df = to_export_frame(df, target=target)
     try:
         write_dataframe(export_df, output_path, fmt=format)
     except BatteryDataStandardError:
@@ -263,7 +278,7 @@ def convert(
     user_metadata = _load_metadata(metadata)
     if user_metadata:
         report.metadata.update(user_metadata)
-    _set_export_report_metadata(report, df, export_df)
+    _set_export_report_metadata(report, df, export_df, target=target)
     report.output_path = str(output_path)
     report.columns = list(export_df.columns)
 
@@ -295,6 +310,7 @@ def convert_neware_groups(
     current_sign: str = "charge-positive",
     repair_policy: str = "warn",
     write_sidecars: bool = True,
+    target: str = "bds",
 ) -> list[ConversionReport]:
     """Convert content-grouped NEWARE record exports into one output per test."""
     groups = group_neware_record_files(paths)
@@ -307,7 +323,7 @@ def convert_neware_groups(
     for index, group in enumerate(groups, start=1):
         primary = Path(str(group["primary_path"]))
         output_stem = _unique_output_stem(str(group.get("output_stem") or primary.stem), index, used_outputs)
-        output_path = output_root / f"{output_stem}.bdf.{format}"
+        output_path = output_root / f"{output_stem}.{output_suffix_for_target(target)}.{format}"
         used_outputs.add(output_path)
 
         adapter = get_adapter("neware", primary)
@@ -325,12 +341,12 @@ def convert_neware_groups(
         if strict and not validation.valid:
             raise ValidationFailed(validation)
 
-        export_df = to_export_frame(result.data)
+        export_df = to_export_frame(result.data, target=target)
         report = ConversionReport(
             input_path=str(primary),
             output_path=str(output_path),
             cycler=adapter.id,
-            schema_version=BDF_SCHEMA_VERSION,
+            schema_version=BDS_SCHEMA_VERSION,
             rows=result.data.height,
             columns=list(export_df.columns),
             validation=validation,
@@ -353,7 +369,7 @@ def convert_neware_groups(
             repair_operations=list(result.metadata.get("repair_operations", [])),
             unmapped_columns=list(result.metadata.get("unmapped_columns", [])),
         )
-        _set_export_report_metadata(report, result.data, export_df)
+        _set_export_report_metadata(report, result.data, export_df, target=target)
         write_dataframe(export_df, output_path, fmt=format)
         if write_sidecars:
             write_json(
@@ -386,6 +402,7 @@ def batch_convert(
     write_sidecars: bool = False,
     sheet: str | int | None = None,
     excel_sheets: str = "auto",
+    target: str = "bds",
 ) -> list[dict[str, Any]]:
     """Convert a directory or archive of raw exports and optionally write a JSONL manifest."""
     input_root = Path(input_dir)
@@ -422,12 +439,17 @@ def batch_convert(
                         write_sidecars=write_sidecars,
                         sheet=sheet,
                         excel_sheets=excel_sheets,
+                        target=target,
                         archive_path=source.archive_path,
                         archive_member=source.archive_member,
                     )
                 )
             except Exception as exc:
-                output_path = output_root / relative.parent / f"{relative.stem}.bdf.{format}"
+                output_path = (
+                    output_root
+                    / relative.parent
+                    / f"{relative.stem}.{output_suffix_for_target(target)}.{format}"
+                )
                 record = {
                     "status": "error",
                     "record_type": "error",
@@ -450,14 +472,14 @@ def batch_convert(
 def validate_file(
     path: str | Path,
     *,
-    schema_version: str = BDF_SCHEMA_VERSION,
+    schema_version: str = BDS_SCHEMA_VERSION,
     strict: bool = True,
 ) -> ValidationReport:
-    """Validate an existing BDF-style CSV, Excel, or Parquet file."""
+    """Validate an existing normalized CSV, Excel, or Parquet file."""
     input_path = Path(path)
     _ensure_input_file(input_path)
     try:
-        df = read_bdf_like(input_path)
+        df = read_bds_like(input_path)
         report = validate(df, schema_version=schema_version, strict=strict)
         if report.valid or not looks_like_export_frame(df):
             return report
@@ -474,6 +496,7 @@ _BATCH_INPUT_SUFFIXES = {
     ".xls",
     ".mpt",
     ".mpr",
+    ".dta",
     ".mat",
     ".parquet",
     ".zip",
@@ -504,8 +527,11 @@ def _set_export_report_metadata(
     report: ConversionReport,
     internal_df: pl.DataFrame,
     export_df: pl.DataFrame,
+    *,
+    target: str,
 ) -> None:
     report.metadata["export_format"] = EXPORT_FORMAT_VERSION
+    report.metadata["export_target"] = normalize_export_target(target)
     report.metadata["internal_columns"] = list(internal_df.columns)
     report.metadata["export_columns"] = list(export_df.columns)
 
@@ -548,7 +574,7 @@ def _unique_output_stem(stem: str, index: int, used_outputs: set[Path]) -> str:
     return candidate
 
 
-def _auto_process_bdf(
+def _auto_process_timeseries(
     input_path: Path,
     *,
     detection: DetectionResult,
@@ -598,7 +624,9 @@ def _auto_process_bdf(
 
     if fallback is not None and not strict:
         return fallback
-    raise ConversionError("Auto detection could not produce a valid BDF table. " + " | ".join(failures))
+    raise ConversionError(
+        "Auto detection could not produce a valid time-series table. " + " | ".join(failures)
+    )
 
 
 def _batch_convert_one(
@@ -618,6 +646,7 @@ def _batch_convert_one(
     write_sidecars: bool,
     sheet: str | int | None,
     excel_sheets: str,
+    target: str,
     archive_path: Path | None,
     archive_member: str | None,
 ) -> list[dict[str, Any]]:
@@ -631,7 +660,7 @@ def _batch_convert_one(
     records: list[dict[str, Any]] = []
     for sheet_value in sheet_values:
         kind = detect_kind(path, sheet=sheet_value)
-        output_suffix = "eis" if kind.kind == "eis" else "bdf"
+        output_suffix = "eis" if kind.kind == "eis" else output_suffix_for_target(target)
         sheet_stem = f"{relative.stem}_{sheet_value}" if sheet_value is not None else relative.stem
         output_path = output_root / relative.parent / f"{sheet_stem}.{output_suffix}.{format}"
         base_record = {
@@ -683,6 +712,7 @@ def _batch_convert_one(
             detection_threshold=detection_threshold,
             write_sidecars=write_sidecars,
             sheet=sheet_value,
+            target=target,
         )
         records.append(
             {
@@ -690,7 +720,7 @@ def _batch_convert_one(
                 "record_type": "converted",
                 **base_record,
                 **report.to_dict(),
-                "data_kind": "bdf-timeseries",
+                "data_kind": "timeseries",
             }
         )
     return records

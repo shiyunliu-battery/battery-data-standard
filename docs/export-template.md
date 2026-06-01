@@ -1,12 +1,11 @@
 # Export Template
 
-CSV and Parquet exports use a consistent user-facing column template across
-cycler adapters. Internal normalized data keeps canonical BDF-style labels such
-as `Test Time / s`; exported files use labels with units in parentheses.
+CSV and Parquet exports use a consistent user-facing BDS column template across
+cycler adapters. Exported files use labels with units in parentheses.
 
 ## Required Export Columns
 
-The exported BDF time-series table requires:
+The exported time-series table requires:
 
 | Column | Meaning |
 | --- | --- |
@@ -38,27 +37,42 @@ Additional adapter-specific or auxiliary columns are appended after the
 preferred columns. Vendor prefixes are removed where possible, and slash-style
 units are rewritten as parenthesized units.
 
-## Internal-to-Export Mapping
+Lower-level adapter-only fields are retained in conversion reports when useful,
+but the default BDS file template above is the public handoff format.
 
-| Internal canonical column | Export column |
-| --- | --- |
-| `Step Index / 1` | `Record Index` |
-| `Date Time ISO` | `Date Time` |
-| `Test Time / s` | `Test Time (s)` |
-| `Voltage / V` | `Voltage (V)` |
-| `Current / A` | `Current (A)` |
-| `Cycle Count / 1` | `Cycle Count` |
-| `Step Count / 1` | `Step Index` |
-| `Step Time / s` | `Step Time (s)` |
-| `Power / W` | `Power (W)` |
-| `Charging Capacity / Ah` | `Charging Capacity (Ah)` |
-| `Discharging Capacity / Ah` | `Discharging Capacity (Ah)` |
-| `Charging Energy / Wh` | `Charging Energy (Wh)` |
-| `Discharging Energy / Wh` | `Discharging Energy (Wh)` |
-| `NEWARE Step Type` | `Step Type` |
+## Export Targets
 
-`Unix Time / s` is retained only in the internal normalized dataframe and report
-metadata. It is not written to the user-facing export table.
+The default `bds` target writes the standard export table above. Downstream
+target presets can be selected from the CLI or Python API:
+
+```bash
+bds convert raw.mpt normalized.csv --target bds
+bds convert raw.mpt pybamm_drive_cycle.csv --target pybamm
+bds convert raw.mpt pyprobe_staging.parquet --target pyprobe --format parquet
+```
+
+```python
+import bds
+
+bds.convert("raw.mpt", "cellpy_staging.csv", target="cellpy")
+bds.convert("raw.mpt", "duckdb_ready.parquet", target="duckdb", format="parquet")
+```
+
+Supported targets are:
+
+| Target | Recommended format | Columns |
+| --- | --- | --- |
+| `bds` | CSV | Standard export columns. |
+| `bdf` | CSV | Legacy BDF-compatible export with slash-unit column names. |
+| `duckdb` | Parquet | Standard export columns. |
+| `polars` | Parquet | Standard export columns. |
+| `battery-archive` | Parquet | Standard export columns. |
+| `cellpy` | CSV | `data_point`, `test_time`, `current`, `voltage`, plus optional cycle, step, capacity, and energy columns. |
+| `beep` | CSV | `test_time`, `current`, `voltage`, plus optional cycle, step, capacity, and energy columns. |
+| `pybamm` | CSV | `time_s`, `current_a`. |
+| `pyprobe` | Parquet | `time_s`, `voltage_v`, `current_a`, plus optional cycle, step, and capacity columns. |
+
+Use `bds export-targets` or `bds.list_export_targets()` to inspect the registry.
 
 ## Time Semantics
 
@@ -76,7 +90,7 @@ preserved as local or unspecified time; the package does not assert UTC.
 Use:
 
 ```bash
-bds validate normalized.bdf.csv
+bds validate normalized.bds.csv
 ```
 
 or:
@@ -84,8 +98,8 @@ or:
 ```python
 from battery_data_standard.api import validate_file
 
-report = validate_file("normalized.bdf.csv")
+report = validate_file("normalized.bds.csv")
 ```
 
 Export validation accepts the user-facing export labels. Internal dataframe
-validation uses canonical BDF-style labels.
+validation uses canonical labels.

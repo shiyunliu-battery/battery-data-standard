@@ -13,16 +13,16 @@ class NovonixAdapter(GenericAdapter):
     raw_current_sign = "charge-positive"
     signatures = ("novonix", "novonix hpc data file", "[summary]", "cycle number", "step time", "run time")
     column_aliases = {
-        "Test Time / s": ("Test Time (s)", "Test Time", "Run Time (h)", "Run Time(h)", "Run Time"),
-        "Step Time / s": ("Step Time (s)", "Step Time", "Step Time (h)", "Step Time(h)"),
-        "Voltage / V": ("Potential (V)", "Voltage (V)"),
-        "Current / A": ("Current (A)",),
-        "Cycle Count / 1": ("Cycle Number", "Cycle"),
-        "Step Count / 1": ("Step Number", "Step"),
-        "Step Index / 1": ("Step position", "Step Position"),
-        "Date Time ISO": ("Date and Time",),
-        "Ambient Temperature / degC": ("Temperature (°C)", "Circuit Temperature (°C)"),
-        "Charging Capacity / Ah": ("Capacity (Ah)",),
-        "Charging Energy / Wh": ("Energy (Wh)",),
-        "Power / W": ("Power(W)", "Power (W)"),
+        "test_time_s": ("Test Time (s)", "Test Time", "Run Time (h)", "Run Time(h)", "Run Time"),
+        "step_time_s": ("Step Time (s)", "Step Time", "Step Time (h)", "Step Time(h)"),
+        "voltage_v": ("Potential (V)", "Voltage (V)"),
+        "current_a": ("Current (A)",),
+        "cycle_index": ("Cycle Number", "Cycle"),
+        "step_index": ("Step Number", "Step"),
+        "record_index": ("Step position", "Step Position"),
+        "date_time": ("Date and Time",),
+        "ambient_temperature_deg_c": ("Temperature (°C)", "Circuit Temperature (°C)"),
+        "charge_capacity_ah": ("Capacity (Ah)",),
+        "charge_energy_wh": ("Energy (Wh)",),
+        "power_w": ("Power(W)", "Power (W)"),
     }

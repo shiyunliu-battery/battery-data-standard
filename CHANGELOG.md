@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 - 2026-06-01
+
+- Added BDS-native internal canonical fields with legacy BDF-compatible export kept behind `target="bdf"`.
+- Added export targets for DuckDB, Polars, cellpy, BEEP, PyBaMM, PyProBE, and Battery Archive workflows.
+- Added `bds audit` and API support for intake quality scoring across raw folders.
+- Added Repower and PEC adapters, BioLogic `.mpr` support through the optional `mpr` extra, and Gamry `.DTA` EIS reading.
+- Added public integration documentation and a Zenodo stack-pressure workbook notebook that uses repository-relative paths.
+- Lowered the supported Python floor to Python 3.10 and expanded CI coverage to Python 3.10 through 3.13.
+
 ## 0.1.2 - 2026-05-30
 
 - Documented how to preserve raw current sign and apply explicit time-axis
@@ -24,7 +33,7 @@
 
 ## 0.1.0 - 2026-05-01
 
-- Published the initial public package for BDF-oriented battery cycler data conversion.
+- Published the initial public package for battery cycler data conversion.
 - Added the `battery_data_standard` Python package and the `bds` import alias.
 - Added the `bds` command-line interface for format detection, conversion, validation,
   schema inspection, and batch processing.
@@ -32,7 +41,7 @@
   and generic tabular exports.
 - Added support for CSV, text, Excel, MATLAB, and Parquet input families where
   time, voltage, and current data can be mapped to the standard schema.
-- Added standardized BDF-style time-series outputs with validation reports,
+- Added standardized BDS time-series outputs with validation reports,
   column provenance, source metadata, and optional sidecar reports.
 - Added EIS detection, reading, conversion, and validation entry points.
 - Added archive-aware batch conversion with JSONL manifests for directories and

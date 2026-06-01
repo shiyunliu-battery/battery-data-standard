@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+      - name: Lint
+        run: python -m ruff check .
+      - name: Format check
+        run: python -m ruff format --check .
+      - name: Type check
+        run: python -m mypy src
+      - name: Dependency audit
+        run: python -m pip_audit .
+      - name: Run tests
+        run: python -m pytest --cov=battery_data_standard --cov-report=term-missing
+      - name: Build package
+        run: python -m build
+      - name: Check distributions
+        run: python -m twine check dist/*
+      - name: Install wheel smoke test
+        shell: bash
+        run: |
+          python -m venv smoke-venv
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            source smoke-venv/Scripts/activate
+          else
+            source smoke-venv/bin/activate
+          fi
+          python -m pip install dist/*.whl
+          python -c "import battery_data_standard; print(battery_data_standard.__version__)"
+          bds --version
+          bds inspect-schema

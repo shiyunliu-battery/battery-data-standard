@@ -98,9 +98,6 @@ def detect_kind(path: str | Path, *, sheet: str | int | None = None) -> DataKind
         neware_excel_kind = _detect_neware_excel_kind(input_path, sheet=sheet)
         if neware_excel_kind is not None:
             return neware_excel_kind
-        eis_excel_kind = _detect_eis_excel_kind(input_path, sheet=sheet)
-        if eis_excel_kind is not None:
-            return eis_excel_kind
 
     try:
         result = read_table_with_metadata(input_path, options={"sheet": sheet})
@@ -127,13 +124,22 @@ def detect_kind(path: str | Path, *, sheet: str | int | None = None) -> DataKind
             {"columns": columns},
         )
     if _looks_like_timeseries(columns):
+        if suffix in {".xls", ".xlsx"} and result.data.height <= 1:
+            eis_excel_kind = _detect_eis_excel_kind(input_path, sheet=sheet)
+            if eis_excel_kind is not None:
+                return eis_excel_kind
         return DataKindResult(
-            "bdf-timeseries",
+            "timeseries",
             0.8,
             "time, voltage, and current-like columns detected",
             str(input_path),
             {"columns": columns},
         )
+
+    if suffix in {".xls", ".xlsx"}:
+        eis_excel_kind = _detect_eis_excel_kind(input_path, sheet=sheet)
+        if eis_excel_kind is not None:
+            return eis_excel_kind
 
     if "frequency" in sample and ("impedance" in sample or "re(z)" in sample or "zim" in sample):
         return DataKindResult("eis", 0.6, "EIS tokens detected in file sample", str(input_path))
@@ -192,7 +198,7 @@ def _detect_neware_excel_kind(path: Path, *, sheet: str | int | None) -> DataKin
         selected = str(sheet)
         if _is_neware_detail_sheet(selected):
             return DataKindResult(
-                "bdf-timeseries",
+                "timeseries",
                 0.9,
                 "NEWARE Detail sheet detected",
                 str(path),
@@ -200,7 +206,7 @@ def _detect_neware_excel_kind(path: Path, *, sheet: str | int | None) -> DataKin
             )
         if _is_neware_record_sheet(selected):
             return DataKindResult(
-                "bdf-timeseries",
+                "timeseries",
                 0.9,
                 "NEWARE record sheet detected",
                 str(path),
@@ -219,7 +225,7 @@ def _detect_neware_excel_kind(path: Path, *, sheet: str | int | None) -> DataKin
     detail_sheets = [name for name in sheet_names if _is_neware_detail_sheet(name)]
     if detail_sheets:
         return DataKindResult(
-            "bdf-timeseries",
+            "timeseries",
             0.9,
             "NEWARE Detail sheet(s) detected",
             str(path),
@@ -228,7 +234,7 @@ def _detect_neware_excel_kind(path: Path, *, sheet: str | int | None) -> DataKin
     record_sheets = [name for name in sheet_names if _is_neware_record_sheet(name)]
     if record_sheets:
         return DataKindResult(
-            "bdf-timeseries",
+            "timeseries",
             0.9,
             "NEWARE record sheet(s) detected",
             str(path),

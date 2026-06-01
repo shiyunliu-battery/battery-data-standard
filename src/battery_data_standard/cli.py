@@ -14,11 +14,13 @@ from .api import (
     convert_eis,
     detect,
     detect_kind,
+    list_export_targets,
     list_supported_formats,
     read_eis,
     validate_eis,
     validate_file,
 )
+from .audit import audit
 from .exceptions import (
     BatteryDataStandardError,
     DetectionError,
@@ -27,7 +29,8 @@ from .exceptions import (
     UnsupportedFormatError,
     ValidationFailed,
 )
-from .schema import BDF_SCHEMA_VERSION, schema_dict
+from .export import EXPORT_TARGET_IDS
+from .schema import BDS_SCHEMA_VERSION, schema_dict
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -39,7 +42,7 @@ EXIT_PARTIAL = 6
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="bds", description="BDF-first battery cycler converter")
+    parser = argparse.ArgumentParser(prog="bds", description="Battery cycler converter and intake QA")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--verbose", action="store_true", help="Enable informational logs on stderr.")
     parser.add_argument("--quiet", action="store_true", help="Suppress non-error logs.")
@@ -49,12 +52,12 @@ def main(argv: list[str] | None = None) -> int:
     detect_parser.add_argument("file")
 
     detect_kind_parser = subparsers.add_parser(
-        "detect-kind", help="Detect BDF time-series, EIS, or unsupported data"
+        "detect-kind", help="Detect time-series, EIS, or unsupported data"
     )
     detect_kind_parser.add_argument("file")
     detect_kind_parser.add_argument("--sheet")
 
-    convert_parser = subparsers.add_parser("convert", help="Convert raw cycler data to BDF-style data")
+    convert_parser = subparsers.add_parser("convert", help="Convert raw cycler data to normalized data")
     convert_parser.add_argument("input")
     convert_parser.add_argument("output")
     convert_parser.add_argument("--cycler", default="auto")
@@ -62,6 +65,12 @@ def main(argv: list[str] | None = None) -> int:
     convert_parser.add_argument("--profile")
     convert_parser.add_argument("--sheet")
     convert_parser.add_argument("--format", choices=("csv", "parquet"), default="csv")
+    convert_parser.add_argument(
+        "--target",
+        choices=EXPORT_TARGET_IDS,
+        default="bds",
+        help="Export target preset. Default keeps the standard BDS table.",
+    )
     convert_parser.add_argument("--report")
     convert_parser.add_argument("--metadata")
     convert_parser.add_argument("--keep-raw", action="store_true")
@@ -87,9 +96,9 @@ def main(argv: list[str] | None = None) -> int:
     convert_eis_parser.add_argument("--sheet")
     convert_eis_parser.add_argument("--format", choices=("csv", "parquet"), default="csv")
 
-    validate_parser = subparsers.add_parser("validate", help="Validate a BDF-style file")
+    validate_parser = subparsers.add_parser("validate", help="Validate a normalized data file")
     validate_parser.add_argument("file")
-    validate_parser.add_argument("--schema", default=BDF_SCHEMA_VERSION)
+    validate_parser.add_argument("--schema", default=BDS_SCHEMA_VERSION)
     validate_parser.add_argument("--no-strict", action="store_true")
 
     validate_eis_parser = subparsers.add_parser("validate-eis", help="Validate an EIS standard file")
@@ -114,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
     batch_parser.add_argument("--sheet")
     batch_parser.add_argument("--excel-sheets", choices=("auto", "all", "first", "name"), default="auto")
     batch_parser.add_argument("--format", choices=("csv", "parquet"), default="csv")
+    batch_parser.add_argument(
+        "--target",
+        choices=EXPORT_TARGET_IDS,
+        default="bds",
+        help="Export target preset for converted time-series files.",
+    )
     batch_parser.add_argument("--metadata")
     batch_parser.add_argument("--keep-raw", action="store_true")
     batch_parser.add_argument(
@@ -130,7 +145,29 @@ def main(argv: list[str] | None = None) -> int:
         help="How to handle repairable table issues before validation.",
     )
 
+    audit_parser = subparsers.add_parser("audit", help="Audit raw cycler files without writing conversions")
+    audit_parser.add_argument("input")
+    audit_parser.add_argument("--recursive", action="store_true")
+    audit_parser.add_argument("--cycler", default="auto")
+    audit_parser.add_argument("--detect-threshold", type=float, default=0.1)
+    audit_parser.add_argument("--profile")
+    audit_parser.add_argument("--sheet")
+    audit_parser.add_argument("--json")
+    audit_parser.add_argument("--html")
+    audit_parser.add_argument(
+        "--current-sign",
+        choices=("preserve", "discharge-positive", "charge-positive"),
+        default="charge-positive",
+    )
+    audit_parser.add_argument(
+        "--repair-policy",
+        choices=("none", "warn", "repair"),
+        default="warn",
+        help="How to score repairable table issues before validation.",
+    )
+
     subparsers.add_parser("formats", help="Print supported cycler formats and maturity tiers")
+    subparsers.add_parser("export-targets", help="Print supported export target presets")
     subparsers.add_parser("inspect-schema", help="Print the pinned schema")
 
     args = parser.parse_args(argv)
@@ -157,6 +194,7 @@ def main(argv: list[str] | None = None) -> int:
                 report_path=args.report,
                 write_sidecars=args.sidecars,
                 sheet=args.sheet,
+                target=args.target,
             )
             print(report.to_json())
         elif args.command == "convert-eis":
@@ -191,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
                 write_sidecars=args.sidecars,
                 sheet=args.sheet,
                 excel_sheets=args.excel_sheets,
+                target=args.target,
             )
             converted = sum(record.get("record_type") == "converted" for record in records)
             skipped = sum(record.get("record_type") == "skipped" for record in records)
@@ -208,8 +247,25 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return EXIT_OK if errors == 0 and converted > 0 else EXIT_PARTIAL
+        elif args.command == "audit":
+            audit_report = audit(
+                args.input,
+                recursive=args.recursive,
+                cycler=args.cycler,
+                profile=args.profile,
+                current_sign=args.current_sign,
+                repair_policy=args.repair_policy,
+                detection_threshold=args.detect_threshold,
+                sheet=args.sheet,
+                json_path=args.json,
+                html_path=args.html,
+            )
+            print(audit_report.to_json())
+            return EXIT_OK if audit_report.errors == 0 else EXIT_PARTIAL
         elif args.command == "formats":
             print(json.dumps({"formats": list_supported_formats()}, indent=2))
+        elif args.command == "export-targets":
+            print(json.dumps({"export_targets": list_export_targets()}, indent=2))
         elif args.command == "inspect-schema":
             print(json.dumps(schema_dict(), indent=2))
     except ValidationFailed as exc:

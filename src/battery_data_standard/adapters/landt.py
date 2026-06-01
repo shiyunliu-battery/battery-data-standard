@@ -16,16 +16,16 @@ class LandtAdapter(GenericAdapter):
     raw_current_sign = "charge-positive"
     signatures = ("landt", "land", "testtime")
     column_aliases = {
-        "Test Time / s": ("TestTime", "Test Time(s)", "Total Time(s)", "Time(s)", "Time(h)", "t"),
-        "Step Time / s": ("StepTime", "Step Time(s)", "Step Time"),
-        "Voltage / V": ("Voltage/V", "Voltage(V)", "Voltage(V) ", "Voltage", "V"),
-        "Current / A": ("Current/A", "Current(A)", "Current(mA)", "Current", "I"),
-        "Power / W": ("Power(W)", "Power", "P"),
-        "Cycle Count / 1": ("Cycle", "Cycle ID"),
-        "Step Count / 1": ("Step", "Step ID"),
-        "Charging Capacity / Ah": ("Charge Capacity(Ah)", "Chg Capacity(Ah)"),
-        "Discharging Capacity / Ah": ("Discharge Capacity(Ah)", "DChg Capacity(Ah)"),
-        "Ambient Temperature / degC": ("Temperature(°C)", "Temperature(C)", "Temp(C)", "TA", "T1"),
+        "test_time_s": ("TestTime", "Test Time(s)", "Total Time(s)", "Time(s)", "Time(h)", "t"),
+        "step_time_s": ("StepTime", "Step Time(s)", "Step Time"),
+        "voltage_v": ("Voltage/V", "Voltage(V)", "Voltage(V) ", "Voltage", "V"),
+        "current_a": ("Current/A", "Current(A)", "Current(mA)", "Current", "I"),
+        "power_w": ("Power(W)", "Power", "P"),
+        "cycle_index": ("Cycle", "Cycle ID"),
+        "step_index": ("Step", "Step ID"),
+        "charge_capacity_ah": ("Charge Capacity(Ah)", "Chg Capacity(Ah)"),
+        "discharge_capacity_ah": ("Discharge Capacity(Ah)", "DChg Capacity(Ah)"),
+        "ambient_temperature_deg_c": ("Temperature(°C)", "Temperature(C)", "Temp(C)", "TA", "T1"),
     }
 
     def sniff(self, path: Path, sample: str) -> DetectionResult:
