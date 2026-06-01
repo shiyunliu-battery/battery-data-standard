@@ -1,0 +1,1 @@
+{"name":"neware_flat_csv","input":"flat.csv","cycler_arg":"auto","expected_cycler":"neware","current_sign":"charge-positive","repair_policy":"repair","min_rows":3,"required_columns":["test_time_s","voltage_v","current_a"],"expected_first_time":0.0}

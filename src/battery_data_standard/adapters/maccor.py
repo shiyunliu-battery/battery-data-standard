@@ -28,7 +28,7 @@ class MaccorAdapter(GenericAdapter):
         "watt-hr",
     )
     column_aliases = {
-        "Test Time / s": (
+        "test_time_s": (
             "Prog Time",
             "Test (Sec)",
             "Test(Sec)",
@@ -40,8 +40,8 @@ class MaccorAdapter(GenericAdapter):
             "TestTime",
             "TestTime(s)",
         ),
-        "Date Time ISO": ("DPT", "DPt Time", "DPT Time", "Date Time", "Date of Test"),
-        "Step Time / s": (
+        "date_time": ("DPT", "DPt Time", "DPT Time", "Date Time", "Date of Test"),
+        "step_time_s": (
             "Step Time",
             "Step (Sec)",
             "Step(Sec)",
@@ -50,23 +50,23 @@ class MaccorAdapter(GenericAdapter):
             "StepTime",
             "StepTime(s)",
         ),
-        "Voltage / V": ("Voltage", "Volts", "Voltage (V)", "Voltage(V)"),
-        "Current / A": ("Current", "Amps", "Current (A)", "Current(A)", "Current (mA)", "Current(mA)"),
-        "Cycle Count / 1": ("Cycle", "Cyc#", "Cycle ID", "Cycle P"),
-        "Step Count / 1": ("Step", "Step ID"),
-        "Step Index / 1": ("Rec#", "Record", "Record ID"),
-        "Ambient Temperature / degC": ("LogTemp001", "Temperature (°C)", "EVTemp (C)", "Temp 1"),
-        "Charging Capacity / Ah": ("Chg Capacity (Ah)", "Chg Capacity (AHr)", "WF Chg Cap"),
-        "Discharging Capacity / Ah": ("DChg Capacity (Ah)", "DChg Capacity (AHr)", "WF Dis Cap"),
-        "Charging Energy / Wh": ("Chg Energy (Wh)", "Chg Energy (WHr)"),
-        "Discharging Energy / Wh": ("DChg Energy (Wh)", "DChg Energy (WHr)"),
-        "Power / W": ("Power", "Power(W)"),
-        "Internal Resistance / ohm": ("ACImp/Ohms", "DCIR/Ohms", "ACImp (Ohms)", "DCIR (Ohms)"),
+        "voltage_v": ("Voltage", "Volts", "Voltage (V)", "Voltage(V)"),
+        "current_a": ("Current", "Amps", "Current (A)", "Current(A)", "Current (mA)", "Current(mA)"),
+        "cycle_index": ("Cycle", "Cyc#", "Cycle ID", "Cycle P"),
+        "step_index": ("Step", "Step ID"),
+        "record_index": ("Rec#", "Record", "Record ID"),
+        "ambient_temperature_deg_c": ("LogTemp001", "Temperature (°C)", "EVTemp (C)", "Temp 1"),
+        "charge_capacity_ah": ("Chg Capacity (Ah)", "Chg Capacity (AHr)", "WF Chg Cap"),
+        "discharge_capacity_ah": ("DChg Capacity (Ah)", "DChg Capacity (AHr)", "WF Dis Cap"),
+        "charge_energy_wh": ("Chg Energy (Wh)", "Chg Energy (WHr)"),
+        "discharge_energy_wh": ("DChg Energy (Wh)", "DChg Energy (WHr)"),
+        "power_w": ("Power", "Power(W)"),
+        "internal_resistance_ohm": ("ACImp/Ohms", "DCIR/Ohms", "ACImp (Ohms)", "DCIR (Ohms)"),
     }
 
     def read_raw(self, path: Path, options: dict[str, Any] | None = None) -> pl.DataFrame:
         raw = read_table(path, options=options)
-        if _has_aliases(raw, self.column_aliases, ("Test Time / s", "Voltage / V", "Current / A")):
+        if _has_aliases(raw, self.column_aliases, ("test_time_s", "voltage_v", "current_a")):
             return raw
         if raw.width < 7:
             return raw

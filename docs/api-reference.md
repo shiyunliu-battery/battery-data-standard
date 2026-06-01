@@ -30,15 +30,15 @@ read(
 )
 ```
 
-Reads a supported cycler export into a normalized BDF-style Polars dataframe.
+Reads a supported cycler export into a normalized Polars dataframe.
 
 Use `cycler="auto"` or `cycler=None` for automatic detection. Use an explicit
 cycler id such as `neware`, `arbin`, `maccor`, `biologic`, `novonix`,
 `basytec`, `landt`, or `generic` when the source system is known.
 
-`read()` returns the internal canonical dataframe, with labels such as
-`Test Time / s`. To display or save the user-facing export labels defined in the
-export template, use:
+`read()` returns a lower-level normalized dataframe for package internals and
+advanced users. For public BDS handoff, display, or saved files, convert it to
+the export template:
 
 ```python
 from battery_data_standard.export import to_export_frame
@@ -59,8 +59,8 @@ df = bds.read(
 ```
 
 `current_sign="preserve"` keeps the source file's current sign convention.
-`repair_policy="repair"` applies documented repairs such as shifting
-`Test Time / s` to start at zero.
+`repair_policy="repair"` applies documented repairs such as shifting elapsed
+test time to start at zero.
 
 ### `read_with_report`
 
@@ -90,6 +90,7 @@ convert(
     report_path=None,
     write_sidecars=False,
     sheet=None,
+    target="bds",
 )
 ```
 
@@ -99,6 +100,28 @@ function returns `ConversionReport`.
 `format` must be `csv` or `parquet`. If `report_path` is provided, the conversion
 report is written as JSON. If `write_sidecars=True`, report and metadata
 sidecars are written next to the output.
+
+`target` selects the output schema preset. The default `bds` target writes the
+standard normalized table. Other targets write staging tables for downstream
+tools:
+
+| Target | Output shape |
+| --- | --- |
+| `bds` | Standard BDS export columns such as `Test Time (s)`, `Voltage (V)`, and `Current (A)`. |
+| `bdf` | Legacy BDF-compatible export with slash-unit column names. |
+| `duckdb` | Same standard table, recommended with Parquet. |
+| `polars` | Same standard table, recommended with Parquet. |
+| `battery-archive` | Same standard table for archive-style packaging, recommended with Parquet. |
+| `cellpy` | cellpy-like lower-case staging columns. |
+| `beep` | BEEP-like lower-case staging columns. |
+| `pybamm` | Drive-cycle staging table with `time_s` and `current_a`. |
+| `pyprobe` | Diagnostic staging table with `time_s`, `voltage_v`, `current_a`, and optional cycle/step fields. |
+
+Available targets are discoverable with:
+
+```python
+bds.list_export_targets()
+```
 
 ## EIS Conversion
 
@@ -150,6 +173,7 @@ batch_convert(
     write_sidecars=False,
     sheet=None,
     excel_sheets="auto",
+    target="bds",
 )
 ```
 
@@ -169,6 +193,43 @@ written as JSONL.
 Archives are expanded into temporary storage. Supported archive suffixes are
 `.zip`, `.tar`, `.tar.gz`, and `.tgz`.
 
+## Intake Audit
+
+### `audit`
+
+```python
+from battery_data_standard.audit import audit
+
+report = audit(
+    "raw_exports",
+    recursive=True,
+    json_path="audit.json",
+    html_path="audit.html",
+)
+```
+
+Audits raw files without writing converted data outputs. The report includes
+file-level status, data kind, cycler, detection confidence, quality score,
+quality grade, missing required columns, unit conversions, repair operations,
+current-sign evidence, duplicate timestamps, non-monotonic time, suspicious flat
+voltage/current checks, cycle/step anomaly checks, and errors.
+
+The equivalent CLI is:
+
+```bash
+bds audit raw_exports --recursive --json audit.json --html audit.html
+```
+
+### `audit_file`
+
+```python
+from battery_data_standard.audit import audit_file
+
+record = audit_file("raw_export.csv")
+```
+
+Returns one `AuditRecord` for a single file.
+
 ## Detection and Metadata
 
 ### `detect`
@@ -187,7 +248,7 @@ detect_kind(path, sheet=None)
 ```
 
 Returns `DataKindResult` for operational routing. Possible kinds include
-`bdf-timeseries`, `eis`, `unsupported`, and `unknown`.
+`timeseries`, `eis`, `unsupported`, and `unknown`.
 
 ### `list_supported_formats`
 
@@ -223,7 +284,7 @@ Converts grouped NEWARE record exports into one output per grouped test.
 validate(dataframe, schema_version=..., strict=True)
 ```
 
-Validates an in-memory BDF-style dataframe and returns `ValidationReport`.
+Validates an in-memory normalized dataframe and returns `ValidationReport`.
 
 ### `validate_file`
 
@@ -233,7 +294,7 @@ from battery_data_standard.api import validate_file
 validate_file(path, schema_version=..., strict=True)
 ```
 
-Validates an existing BDF-style CSV, Excel, or Parquet file on disk. This helper
+Validates an existing normalized CSV, Excel, or Parquet file on disk. This helper
 is available from `battery_data_standard.api`.
 
 ## Reports
@@ -282,7 +343,7 @@ than parsing free-text messages.
 
 | Status | Record type | Meaning |
 | --- | --- | --- |
-| `ok` | `converted` | A BDF time-series or EIS file was converted. |
+| `ok` | `converted` | A time-series or EIS file was converted. |
 | `unsupported` | `skipped` | The file was identified as unsupported or non-raw helper content. |
 | `error` | `error` | Conversion was attempted and failed. |
 
@@ -300,7 +361,7 @@ Common fields include:
 | `kind_reason` | Human-readable reason from `detect_kind()`. |
 | `record_type` | `converted`, `skipped`, or `error`. |
 
-Converted BDF records include serialized `ConversionReport` fields. EIS records
+Converted time-series records include serialized `ConversionReport` fields. EIS records
 include validation details, row count, and columns. Skipped records include
 `skip_reason`. Error records include `error_type` and `error`.
 

@@ -1,11 +1,14 @@
-"""Pinned BDF-style schema definitions used by the package."""
+"""Pinned canonical schema definitions used by the package."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 
+BDS_SCHEMA_VERSION = "bds-2026-05"
 BDF_SCHEMA_VERSION = "bdf-2026-05"
+LEGACY_SCHEMA_VERSIONS = (BDF_SCHEMA_VERSION,)
+SUPPORTED_SCHEMA_VERSIONS = (BDS_SCHEMA_VERSION, *LEGACY_SCHEMA_VERSIONS)
 
 
 @dataclass(frozen=True)
@@ -20,12 +23,14 @@ class ColumnSpec:
 
 CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
     ColumnSpec(
-        "Test Time / s",
-        "test_time_second",
+        "test_time_s",
+        "test_time_s",
         "s",
         True,
         "Elapsed time since the start of the test.",
         (
+            "Test Time / s",
+            "test_time_second",
             "Test Time",
             "Test Time(s)",
             "Test Time (s)",
@@ -64,12 +69,14 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Voltage / V",
-        "voltage_volt",
+        "voltage_v",
+        "voltage_v",
         "V",
         True,
         "Instantaneous voltage.",
         (
+            "Voltage / V",
+            "voltage_volt",
             "Voltage",
             "Voltage(V)",
             "Voltage (V)",
@@ -105,12 +112,14 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Current / A",
-        "current_ampere",
+        "current_a",
+        "current_a",
         "A",
         True,
         "Instantaneous current.",
         (
+            "Current / A",
+            "current_ampere",
             "Current",
             "Current(A)",
             "Current (A)",
@@ -142,12 +151,14 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Unix Time / s",
-        "unix_time_second",
+        "unix_time_s",
+        "unix_time_s",
         "s",
         False,
         "UTC Unix timestamp.",
         (
+            "Unix Time / s",
+            "unix_time_second",
             "Unix Time",
             "Timestamp",
             "DateTime",
@@ -160,12 +171,14 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Date Time ISO",
-        "date_time_iso",
+        "date_time",
+        "date_time",
         "",
         False,
         "ISO-8601 timestamp extension column.",
         (
+            "Date Time ISO",
+            "date_time_iso",
             "DateTime",
             "Datetime",
             "Date Time",
@@ -178,12 +191,15 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Cycle Count / 1",
-        "cycle_count",
+        "cycle_index",
+        "cycle_index",
         "1",
         False,
         "Monotonically increasing cycle index.",
         (
+            "Cycle Count / 1",
+            "cycle_count",
+            "Cycle Count",
             "Cycle",
             "Cycle ID",
             "Cycle_Index",
@@ -196,20 +212,35 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Step Count / 1",
-        "step_count",
+        "step_index",
+        "step_index",
         "1",
         False,
         "Monotonically increasing step index.",
-        ("Step", "Step ID", "Step_Index", "Step Index", "step_index", "Step Number", "StepNo", "Ns"),
+        (
+            "Step Count / 1",
+            "step_count",
+            "Step Count",
+            "Step",
+            "Step ID",
+            "Step_Index",
+            "Step Index",
+            "Step Number",
+            "StepNo",
+            "Ns",
+        ),
     ),
     ColumnSpec(
-        "Step Index / 1",
-        "step_index",
+        "record_index",
+        "record_index",
         "1",
         False,
         "Point index within a step.",
         (
+            "Step Index / 1",
+            "Record Count / 1",
+            "Record Index",
+            "data_point_index",
             "DataPoint",
             "Data Point",
             "Record",
@@ -223,12 +254,14 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Step Time / s",
-        "step_time_second",
+        "step_time_s",
+        "step_time_s",
         "s",
         False,
         "Elapsed time within the active step.",
         (
+            "Step Time / s",
+            "step_time_second",
             "Step Time",
             "Step (Sec)",
             "Step Time(s)",
@@ -250,12 +283,14 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Ambient Temperature / degC",
-        "ambient_temperature_celsius",
+        "ambient_temperature_deg_c",
+        "ambient_temperature_deg_c",
         "degC",
         False,
         "Ambient or chamber temperature.",
         (
+            "Ambient Temperature / degC",
+            "ambient_temperature_celsius",
             "Temperature",
             "Temperature(C)",
             "Temperature (C)",
@@ -283,20 +318,29 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Surface Temperature T1 / degC",
-        "temperature_t1_celsius",
+        "temperature_t1_deg_c",
+        "temperature_t1_deg_c",
         "degC",
         False,
         "Surface temperature sensor T1.",
-        ("T1", "Temperature 1", "Surface Temperature T1"),
+        (
+            "Surface Temperature T1 / degC",
+            "temperature_t1_celsius",
+            "T1",
+            "Temperature 1",
+            "Surface Temperature T1",
+        ),
     ),
     ColumnSpec(
-        "Charging Capacity / Ah",
-        "charging_capacity_ah",
+        "charge_capacity_ah",
+        "charge_capacity_ah",
         "Ah",
         False,
         "Capacity accumulated during charge.",
         (
+            "Charging Capacity / Ah",
+            "charging_capacity_ah",
+            "Charging Capacity (Ah)",
             "Charge Capacity",
             "Charge Capacity(Ah)",
             "Charge Capacity (Ah)",
@@ -314,12 +358,15 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Discharging Capacity / Ah",
-        "discharging_capacity_ah",
+        "discharge_capacity_ah",
+        "discharge_capacity_ah",
         "Ah",
         False,
         "Capacity accumulated during discharge.",
         (
+            "Discharging Capacity / Ah",
+            "discharging_capacity_ah",
+            "Discharging Capacity (Ah)",
             "Discharge Capacity",
             "Discharge Capacity(Ah)",
             "Discharge Capacity (Ah)",
@@ -335,12 +382,15 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Charging Energy / Wh",
-        "charging_energy_wh",
+        "charge_energy_wh",
+        "charge_energy_wh",
         "Wh",
         False,
         "Energy accumulated during charge.",
         (
+            "Charging Energy / Wh",
+            "charging_energy_wh",
+            "Charging Energy (Wh)",
             "Charge Energy",
             "Charge Energy(Wh)",
             "Charge Energy (Wh)",
@@ -352,12 +402,15 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Discharging Energy / Wh",
-        "discharging_energy_wh",
+        "discharge_energy_wh",
+        "discharge_energy_wh",
         "Wh",
         False,
         "Energy accumulated during discharge.",
         (
+            "Discharging Energy / Wh",
+            "discharging_energy_wh",
+            "Discharging Energy (Wh)",
             "Discharge Energy",
             "Discharge Energy(Wh)",
             "Discharge Energy (Wh)",
@@ -369,20 +422,31 @@ CANONICAL_COLUMNS: tuple[ColumnSpec, ...] = (
         ),
     ),
     ColumnSpec(
-        "Power / W",
-        "power_watt",
+        "power_w",
+        "power_w",
         "W",
         False,
         "Instantaneous power.",
-        ("Power", "Power(W)", "Power (W)", "Power(mW)", "Power [W]", "P/W", "P(W)"),
+        (
+            "Power / W",
+            "power_watt",
+            "Power",
+            "Power(W)",
+            "Power (W)",
+            "Power(mW)",
+            "Power [W]",
+            "P/W",
+            "P(W)",
+        ),
     ),
     ColumnSpec(
-        "Internal Resistance / ohm",
+        "internal_resistance_ohm",
         "internal_resistance_ohm",
         "ohm",
         False,
         "Internal resistance.",
         (
+            "Internal Resistance / ohm",
             "Internal Resistance",
             "Internal_Resistance",
             "DCIR(O)",
@@ -403,11 +467,17 @@ OPTIONAL_COLUMNS = tuple(c.label for c in CANONICAL_COLUMNS if not c.required)
 ALL_COLUMNS = tuple(c.label for c in CANONICAL_COLUMNS)
 LABEL_TO_SPEC = {c.label: c for c in CANONICAL_COLUMNS}
 MACHINE_TO_LABEL = {c.machine_name: c.label for c in CANONICAL_COLUMNS}
+ALIAS_TO_LABEL = {
+    str(alias).strip().lower(): c.label
+    for c in CANONICAL_COLUMNS
+    for alias in (c.label, c.machine_name, *c.aliases)
+}
 
 
 def schema_dict() -> dict:
     return {
-        "schema_version": BDF_SCHEMA_VERSION,
+        "schema_version": BDS_SCHEMA_VERSION,
+        "legacy_schema_versions": list(LEGACY_SCHEMA_VERSIONS),
         "required": list(REQUIRED_COLUMNS),
         "columns": [asdict(c) for c in CANONICAL_COLUMNS],
     }
@@ -416,3 +486,8 @@ def schema_dict() -> dict:
 def aliases_for(label: str, extra: Iterable[str] = ()) -> tuple[str, ...]:
     spec = LABEL_TO_SPEC[label]
     return (spec.label, spec.machine_name, *spec.aliases, *tuple(extra))
+
+
+def canonical_label_for(label: str) -> str | None:
+    """Return the BDS canonical field name for a canonical field or legacy alias."""
+    return ALIAS_TO_LABEL.get(str(label).strip().lower())

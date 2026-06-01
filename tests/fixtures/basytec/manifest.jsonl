@@ -1,0 +1,1 @@
+{"name":"basytec_basic_csv","input":"basic.csv","cycler_arg":"auto","expected_cycler":"basytec","current_sign":"preserve","repair_policy":"warn","min_rows":3,"required_columns":["test_time_s","voltage_v","current_a"],"expected_first_time":0.0}

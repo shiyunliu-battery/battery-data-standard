@@ -8,3 +8,4 @@ This directory contains public documentation for `battery-data-standard`.
 - [Supported formats](supported-formats.md)
 - [Export template](export-template.md)
 - [Schema compatibility](schema-compatibility.md)
+- [Ecosystem integrations](integrations.md)

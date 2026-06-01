@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import importlib
 import json
 import logging
 import os
@@ -76,6 +77,12 @@ def sample_text(path: str | Path, limit: int = 65536) -> str:
             return ("\t".join(str(col) for col in df.columns) + "\n" + df.head(5).write_csv(separator="\t"))[
                 :limit
             ]
+        except Exception:
+            pass
+    if path.suffix.lower() == ".dta":
+        try:
+            result = read_gamry_dta_zcurve(path)
+            return ("\t".join(str(col) for col in result.data.columns) + "\n")[:limit]
         except Exception:
             pass
     data = path.read_bytes()[:limit]
@@ -152,9 +159,9 @@ def read_table_with_metadata(
     options = options or {}
     suffix = path.suffix.lower()
     if suffix == ".mpr":
-        raise UnsupportedFeatureError(
-            "BioLogic .mpr is a binary EC-Lab format and is not supported yet; export .mpt text instead."
-        )
+        return read_biologic_mpr(path)
+    if suffix == ".dta":
+        return read_gamry_dta_zcurve(path)
     if suffix in {".xlsx", ".xls"}:
         return read_excel_with_metadata(
             path,
@@ -332,7 +339,9 @@ def read_excel_with_metadata(
         )
 
     scored = [(name, df, _score_excel_sheet(df)) for name, df in frames]
-    selected = scored[0] if sheet_policy == "first" else _select_excel_sheet(path, scored, sheet_policy=sheet_policy)
+    selected = (
+        scored[0] if sheet_policy == "first" else _select_excel_sheet(path, scored, sheet_policy=sheet_policy)
+    )
     selected_df, excel_header_row = _prepare_excel_dataframe(selected[1])
     data = _pandas_to_polars(selected_df)
     data = _drop_unit_row(data)
@@ -491,6 +500,127 @@ def _pandas_to_polars(df: pd.DataFrame) -> pl.DataFrame:
             columns[str(column)] = series.astype("object").where(pd.notna(series), None).to_list()
     series_list = [pl.Series(name, values, strict=False) for name, values in columns.items()]
     return pl.DataFrame(series_list)
+
+
+def read_biologic_mpr(path: str | Path) -> TableReadResult:
+    """Read a BioLogic EC-Lab binary .mpr file through the optional galvani backend."""
+    path = Path(path)
+    try:
+        galvani = importlib.import_module("galvani")
+    except ImportError as exc:
+        raise UnsupportedFeatureError(
+            "BioLogic .mpr requires the optional galvani backend. "
+            "Install with battery-data-standard[mpr], or export .mpt text from EC-Lab."
+        ) from exc
+
+    bio_logic = galvani.BioLogic
+    mpr = bio_logic.MPRfile(str(path))
+    raw_data = getattr(mpr, "data", None)
+    if raw_data is None:
+        raise UnsupportedFormatError(f"BioLogic .mpr file {path} did not expose a data table.")
+
+    df = pd.DataFrame(raw_data)
+    df.columns = [_decode_mpr_column_name(column) for column in df.columns]
+    data = _pandas_to_polars(df)
+    metadata: dict[str, Any] = {
+        "source_format": "mpr",
+        "backend": "galvani",
+        "raw_rows": data.height,
+        "raw_columns": list(data.columns),
+    }
+    for attribute in ("version", "timestamp", "techniques", "settings", "modules"):
+        value = getattr(mpr, attribute, None)
+        if value is None:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            metadata[f"biologic_mpr_{attribute}"] = value
+        else:
+            metadata[f"biologic_mpr_{attribute}"] = str(value)
+    return TableReadResult(data, metadata)
+
+
+def _decode_mpr_column_name(column: Any) -> str:
+    if isinstance(column, bytes):
+        for encoding in ("utf-8", "latin-1"):
+            try:
+                return column.decode(encoding).strip()
+            except UnicodeDecodeError:
+                continue
+        return column.decode("utf-8", errors="replace").strip()
+    return str(column).strip()
+
+
+def read_gamry_dta_zcurve(path: str | Path) -> TableReadResult:
+    """Read the ZCURVE impedance table from a Gamry .DTA file."""
+    path = Path(path)
+    text, encoding = read_text(path)
+    lines = text.splitlines()
+    headers, units, data_start = _find_gamry_zcurve_table(lines, path)
+    rows: list[list[str]] = []
+    for line in lines[data_start:]:
+        stripped = line.strip()
+        if not stripped:
+            if rows:
+                break
+            continue
+        upper = stripped.upper()
+        if upper.startswith(("EXPERIMENTABORTED", "STOPABORT", "TAG", "CURVE", "EOC")):
+            break
+        cells = stripped.split("\t")
+        if len(cells) != len(headers):
+            if rows:
+                break
+            continue
+        rows.append(cells)
+
+    if not rows:
+        raise UnsupportedFormatError(f"No Gamry ZCURVE data rows found in {path}.")
+
+    data = pl.DataFrame(rows, schema=headers, orient="row")
+    for column in data.columns:
+        parsed = [_parse_numeric_text(value) for value in data[column].to_list()]
+        if any(value is not None for value in parsed):
+            data = data.with_columns(pl.Series(column, parsed, dtype=pl.Float64))
+
+    return TableReadResult(
+        data,
+        {
+            "source_format": "gamry-dta",
+            "backend": "native-zcurve",
+            "encoding": encoding,
+            "header_row": data_start - 2,
+            "gamry_zcurve_units": dict(zip(headers, units, strict=False)),
+            "raw_rows": data.height,
+            "raw_columns": list(data.columns),
+        },
+    )
+
+
+def _find_gamry_zcurve_table(lines: list[str], path: Path) -> tuple[list[str], list[str], int]:
+    for index, line in enumerate(lines):
+        if not line.strip().upper().startswith("ZCURVE"):
+            continue
+        if index + 1 >= len(lines):
+            break
+        headers = [cell.strip() for cell in lines[index + 1].strip().split("\t")]
+        units = (
+            [cell.strip() for cell in lines[index + 2].strip().split("\t")] if index + 2 < len(lines) else []
+        )
+        if headers and any(_slug(header) in {"freq", "zreal", "zimag"} for header in headers):
+            return headers, units, index + 3
+    raise UnsupportedFormatError(f"Could not find a Gamry ZCURVE table in {path}.")
+
+
+def _parse_numeric_text(value: Any) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", ".")
+    if text in {"", "-", "--", "nan", "NaN"}:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
 
 
 def sample_matlab(path: str | Path, *, limit: int = 65536) -> str:
@@ -1001,13 +1131,17 @@ def _atomic_write(path: Path, writer: Any) -> None:
                 temp_path.unlink()
 
 
-def read_bdf_like(path: str | Path) -> pl.DataFrame:
+def read_bds_like(path: str | Path) -> pl.DataFrame:
     path = Path(path)
     if ".parquet" in "".join(path.suffixes).lower():
         return pl.read_parquet(path)
     if path.suffix.lower() in {".xlsx", ".xls"}:
         return read_excel(path)
     return pl.read_csv(path, null_values=["", "NaN", "nan"])
+
+
+def read_bdf_like(path: str | Path) -> pl.DataFrame:
+    return read_bds_like(path)
 
 
 def format_from_suffix(path: Path) -> str:

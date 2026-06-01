@@ -45,8 +45,8 @@ class NewareAdapter(GenericAdapter):
         "电压(v)",
     )
     column_aliases = {
-        "Test Time / s": (
-            "BDS Test Time / s",
+        "test_time_s": (
+            "BDS test_time_s",
             "Total Time(s)",
             "Test Time(s)",
             "TotalTime(s)",
@@ -58,7 +58,7 @@ class NewareAdapter(GenericAdapter):
             "总时间(s)",
             "测试时间(s)",
         ),
-        "Step Time / s": (
+        "step_time_s": (
             "Time",
             "Time(h:min:s.ms)",
             "Time(s)",
@@ -72,8 +72,8 @@ class NewareAdapter(GenericAdapter):
             "Step Time(s)",
             "时间(s)",
         ),
-        "Voltage / V": ("Voltage(V)", "Voltage (V)", "Vol(V)", "Voltage", "Channel Voltage", "电压(V)"),
-        "Current / A": (
+        "voltage_v": ("Voltage(V)", "Voltage (V)", "Vol(V)", "Voltage", "Channel Voltage", "电压(V)"),
+        "current_a": (
             "Current(mA)",
             "Current (mA)",
             "Cur(mA)",
@@ -90,10 +90,10 @@ class NewareAdapter(GenericAdapter):
             "电流(A)",
             "电流(mA)",
         ),
-        "Cycle Count / 1": ("Cycle ID", "Cycle", "Cycle Index"),
-        "Step Count / 1": ("Step ID", "Step", "Step Index"),
-        "Step Index / 1": ("DataPoint", "Data Point", "Record ID", "Record", "Record Index"),
-        "Date Time ISO": (
+        "cycle_index": ("Cycle ID", "Cycle", "Cycle Index"),
+        "step_index": ("Step ID", "Step", "Step Index"),
+        "record_index": ("DataPoint", "Data Point", "Record ID", "Record", "Record Index"),
+        "date_time": (
             "Realtime",
             "DateTime",
             "Datetime",
@@ -102,13 +102,13 @@ class NewareAdapter(GenericAdapter):
             "Date(h:min:s.ms)",
             "记录时间",
         ),
-        "Ambient Temperature / degC": (
+        "ambient_temperature_deg_c": (
             "Temperature(C)",
             "Temperature(°C)",
             "Temperature 1 (degC)",
             "温度(°C)",
         ),
-        "Charging Capacity / Ah": (
+        "charge_capacity_ah": (
             "Capacitance_Chg(mAh)",
             "Charge Capacity(mAh)",
             "Charge_Capacity(mAh)",
@@ -118,7 +118,7 @@ class NewareAdapter(GenericAdapter):
             "Capacity(mAh)",
             "充电容量(mAh)",
         ),
-        "Discharging Capacity / Ah": (
+        "discharge_capacity_ah": (
             "Capacitance_DChg(mAh)",
             "Discharge Capacity(mAh)",
             "Discharge_Capacity(mAh)",
@@ -127,10 +127,10 @@ class NewareAdapter(GenericAdapter):
             "DChg. Capacity(mAh)",
             "放电容量(mAh)",
         ),
-        "Charging Energy / Wh": ("Engy_Chg(mWh)", "Charge Energy(mWh)", "充电能量(mWh)"),
-        "Discharging Energy / Wh": ("Engy_DChg(mWh)", "Discharge Energy(mWh)", "放电能量(mWh)"),
-        "Power / W": ("Power(mW)",),
-        "Internal Resistance / ohm": ("DCIR(O)", "DCIR(Ω)"),
+        "charge_energy_wh": ("Engy_Chg(mWh)", "Charge Energy(mWh)", "充电能量(mWh)"),
+        "discharge_energy_wh": ("Engy_DChg(mWh)", "Discharge Energy(mWh)", "放电能量(mWh)"),
+        "power_w": ("Power(mW)",),
+        "internal_resistance_ohm": ("DCIR(O)", "DCIR(Ω)"),
     }
 
     def sniff(self, path: Path, sample: str) -> DetectionResult:
@@ -346,29 +346,29 @@ class NewareAdapter(GenericAdapter):
         )
         if capacity_col is not None:
             values = _float_values(raw[capacity_col])
-            if "Charging Capacity / Ah" not in df.columns:
+            if "charge_capacity_ah" not in df.columns:
                 df = df.with_columns(
-                    pl.Series("Charging Capacity / Ah", _values_for_status(values, status_values, "charge"))
+                    pl.Series("charge_capacity_ah", _values_for_status(values, status_values, "charge"))
                 )
                 result.provenance.append(
                     ColumnProvenance(
-                        "Charging Capacity / Ah",
+                        "charge_capacity_ah",
                         f"{capacity_col}|{status_source}",
                         source_unit="Ah",
                         transform="split NEWARE detail capacity by charge status",
                     )
                 )
                 derived.append(capacity_col)
-            if "Discharging Capacity / Ah" not in df.columns:
+            if "discharge_capacity_ah" not in df.columns:
                 df = df.with_columns(
                     pl.Series(
-                        "Discharging Capacity / Ah",
+                        "discharge_capacity_ah",
                         _values_for_status(values, status_values, "discharge"),
                     )
                 )
                 result.provenance.append(
                     ColumnProvenance(
-                        "Discharging Capacity / Ah",
+                        "discharge_capacity_ah",
                         f"{capacity_col}|{status_source}",
                         source_unit="Ah",
                         transform="split NEWARE detail capacity by discharge status",
@@ -379,28 +379,26 @@ class NewareAdapter(GenericAdapter):
         energy_col = _first_existing(raw.columns, ("Energy(Wh)", "Energy (Wh)", "Energy"))
         if energy_col is not None:
             values = _float_values(raw[energy_col])
-            if "Charging Energy / Wh" not in df.columns:
+            if "charge_energy_wh" not in df.columns:
                 df = df.with_columns(
-                    pl.Series("Charging Energy / Wh", _values_for_status(values, status_values, "charge"))
+                    pl.Series("charge_energy_wh", _values_for_status(values, status_values, "charge"))
                 )
                 result.provenance.append(
                     ColumnProvenance(
-                        "Charging Energy / Wh",
+                        "charge_energy_wh",
                         f"{energy_col}|{status_source}",
                         source_unit="Wh",
                         transform="split NEWARE detail energy by charge status",
                     )
                 )
                 derived.append(energy_col)
-            if "Discharging Energy / Wh" not in df.columns:
+            if "discharge_energy_wh" not in df.columns:
                 df = df.with_columns(
-                    pl.Series(
-                        "Discharging Energy / Wh", _values_for_status(values, status_values, "discharge")
-                    )
+                    pl.Series("discharge_energy_wh", _values_for_status(values, status_values, "discharge"))
                 )
                 result.provenance.append(
                     ColumnProvenance(
-                        "Discharging Energy / Wh",
+                        "discharge_energy_wh",
                         f"{energy_col}|{status_source}",
                         source_unit="Wh",
                         transform="split NEWARE detail energy by discharge status",
@@ -435,17 +433,17 @@ class NewareAdapter(GenericAdapter):
             )
             appended.append(col)
 
-            if _is_tu1_temperature_column(col) and "Surface Temperature T1 / degC" not in df.columns:
-                df = df.with_columns(pl.Series("Surface Temperature T1 / degC", values, dtype=pl.Float64))
+            if _is_tu1_temperature_column(col) and "temperature_t1_deg_c" not in df.columns:
+                df = df.with_columns(pl.Series("temperature_t1_deg_c", values, dtype=pl.Float64))
                 result.provenance.append(
                     ColumnProvenance(
-                        "Surface Temperature T1 / degC",
+                        "temperature_t1_deg_c",
                         col,
                         source_unit="degC",
                         transform="copied from NEWARE auxiliary TU1 temperature channel",
                     )
                 )
-                appended.append("Surface Temperature T1 / degC")
+                appended.append("temperature_t1_deg_c")
 
         if not appended:
             return result
@@ -492,23 +490,23 @@ class NewareAdapter(GenericAdapter):
     @staticmethod
     def _order_output_columns(result: AdapterResult) -> AdapterResult:
         preferred = [
-            "Test Time / s",
-            "Date Time ISO",
-            "Unix Time / s",
-            "Voltage / V",
-            "Current / A",
-            "Cycle Count / 1",
-            "Step Count / 1",
-            "Step Index / 1",
-            "Step Time / s",
-            "Power / W",
-            "Ambient Temperature / degC",
-            "Surface Temperature T1 / degC",
-            "Charging Capacity / Ah",
-            "Discharging Capacity / Ah",
-            "Charging Energy / Wh",
-            "Discharging Energy / Wh",
-            "Internal Resistance / ohm",
+            "test_time_s",
+            "date_time",
+            "unix_time_s",
+            "voltage_v",
+            "current_a",
+            "cycle_index",
+            "step_index",
+            "record_index",
+            "step_time_s",
+            "power_w",
+            "ambient_temperature_deg_c",
+            "temperature_t1_deg_c",
+            "charge_capacity_ah",
+            "discharge_capacity_ah",
+            "charge_energy_wh",
+            "discharge_energy_wh",
+            "internal_resistance_ohm",
             "NEWARE Step Type",
         ]
         existing = [column for column in preferred if column in result.data.columns]
@@ -1244,12 +1242,12 @@ def _check_and_sort_record_rows(frame: Any, pd: Any) -> tuple[Any, dict[str, Any
                 valid_dates = times.dropna()
                 if len(valid_dates) == len(times) and _datetime_series_non_decreasing(times):
                     derived, adjusted = _strict_elapsed_seconds_from_datetimes(times, pd)
-                    output["BDS Test Time / s"] = derived
+                    output["BDS test_time_s"] = derived
                     metadata["test_time_source"] = date_col
                     metadata["test_time_duplicate_timestamps_adjusted"] = adjusted
                     warnings.append(
                         f"NEWARE {total_time_col} was not strictly increasing; "
-                        f"derived BDS Test Time / s from {date_col}."
+                        f"derived BDS test_time_s from {date_col}."
                     )
 
     return output, metadata, warnings

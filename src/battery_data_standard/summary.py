@@ -1,4 +1,4 @@
-"""Step and cycle summary helpers for normalized BDF-style data."""
+"""Step and cycle summary helpers for normalized time-series data."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import polars as pl
 
 def summarize_steps(df: pl.DataFrame) -> pl.DataFrame:
     """Summarize a normalized dataframe by cycle and step when available."""
-    group_cols = [col for col in ("Cycle Count / 1", "Step Count / 1") if col in df.columns]
+    group_cols = [col for col in ("cycle_index", "step_index") if col in df.columns]
     if not group_cols:
-        if "Step Index / 1" in df.columns:
-            group_cols = ["Step Index / 1"]
+        if "record_index" in df.columns:
+            group_cols = ["record_index"]
         else:
             return _summary_for_whole_table(df, label="all")
     return _group_summary(df, group_cols)
@@ -18,9 +18,9 @@ def summarize_steps(df: pl.DataFrame) -> pl.DataFrame:
 
 def summarize_cycles(df: pl.DataFrame) -> pl.DataFrame:
     """Summarize a normalized dataframe by cycle when available."""
-    if "Cycle Count / 1" not in df.columns:
+    if "cycle_index" not in df.columns:
         return _summary_for_whole_table(df, label="all")
-    return _group_summary(df, ["Cycle Count / 1"])
+    return _group_summary(df, ["cycle_index"])
 
 
 def _group_summary(df: pl.DataFrame, group_cols: list[str]) -> pl.DataFrame:
@@ -36,34 +36,34 @@ def _summary_exprs(df: pl.DataFrame) -> list[pl.Expr]:
     exprs: list[pl.Expr] = [
         pl.len().alias("Rows / 1"),
     ]
-    if "Test Time / s" in df.columns:
+    if "test_time_s" in df.columns:
         exprs.extend(
             [
-                pl.col("Test Time / s").min().alias("Start Test Time / s"),
-                pl.col("Test Time / s").max().alias("End Test Time / s"),
-                (pl.col("Test Time / s").max() - pl.col("Test Time / s").min()).alias("Duration / s"),
+                pl.col("test_time_s").min().alias("Start test_time_s"),
+                pl.col("test_time_s").max().alias("End test_time_s"),
+                (pl.col("test_time_s").max() - pl.col("test_time_s").min()).alias("Duration / s"),
             ]
         )
-    if "Voltage / V" in df.columns:
+    if "voltage_v" in df.columns:
         exprs.extend(
             [
-                pl.col("Voltage / V").min().alias("Min Voltage / V"),
-                pl.col("Voltage / V").max().alias("Max Voltage / V"),
+                pl.col("voltage_v").min().alias("Min voltage_v"),
+                pl.col("voltage_v").max().alias("Max voltage_v"),
             ]
         )
-    if "Current / A" in df.columns:
+    if "current_a" in df.columns:
         exprs.extend(
             [
-                pl.col("Current / A").min().alias("Min Current / A"),
-                pl.col("Current / A").max().alias("Max Current / A"),
+                pl.col("current_a").min().alias("Min current_a"),
+                pl.col("current_a").max().alias("Max current_a"),
             ]
         )
-    if "Charging Capacity / Ah" in df.columns:
-        exprs.append(pl.col("Charging Capacity / Ah").max().alias("Charging Capacity End / Ah"))
-    if "Discharging Capacity / Ah" in df.columns:
-        exprs.append(pl.col("Discharging Capacity / Ah").max().alias("Discharging Capacity End / Ah"))
-    if "Charging Energy / Wh" in df.columns:
-        exprs.append(pl.col("Charging Energy / Wh").max().alias("Charging Energy End / Wh"))
-    if "Discharging Energy / Wh" in df.columns:
-        exprs.append(pl.col("Discharging Energy / Wh").max().alias("Discharging Energy End / Wh"))
+    if "charge_capacity_ah" in df.columns:
+        exprs.append(pl.col("charge_capacity_ah").max().alias("Charging Capacity End / Ah"))
+    if "discharge_capacity_ah" in df.columns:
+        exprs.append(pl.col("discharge_capacity_ah").max().alias("Discharging Capacity End / Ah"))
+    if "charge_energy_wh" in df.columns:
+        exprs.append(pl.col("charge_energy_wh").max().alias("Charging Energy End / Wh"))
+    if "discharge_energy_wh" in df.columns:
+        exprs.append(pl.col("discharge_energy_wh").max().alias("Discharging Energy End / Wh"))
     return exprs

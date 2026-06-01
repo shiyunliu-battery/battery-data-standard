@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from datetime import UTC
+from datetime import timezone
 from itertools import pairwise
 from typing import Any
 
@@ -15,7 +15,14 @@ import polars as pl
 from ..exceptions import ConversionError
 from ..profiles import profile_column_map
 from ..reports import ColumnProvenance
-from ..schema import ALL_COLUMNS, CANONICAL_COLUMNS, LABEL_TO_SPEC, REQUIRED_COLUMNS, aliases_for
+from ..schema import (
+    ALL_COLUMNS,
+    CANONICAL_COLUMNS,
+    LABEL_TO_SPEC,
+    REQUIRED_COLUMNS,
+    aliases_for,
+    canonical_label_for,
+)
 
 VALID_CURRENT_SIGN = {"preserve", "discharge-positive", "charge-positive"}
 VALID_REPAIR_POLICY = {"none", "warn", "repair"}
@@ -47,7 +54,7 @@ def normalize_raw_frame(
         )
 
     raw = _clean_raw_columns(raw)
-    aliases = aliases or {}
+    aliases = _canonicalize_alias_map(aliases or {})
     profile_map = profile_column_map(profile or {})
     state = NormalizationState(warnings=[], provenance=[], used_columns=set())
     output: dict[str, pl.Series] = {}
@@ -80,7 +87,7 @@ def normalize_raw_frame(
         missing = [col for col in REQUIRED_COLUMNS if col not in output]
         if missing:
             raise ConversionError(
-                f"Missing required BDF columns after {adapter_id} normalization: {missing}. "
+                f"Missing required canonical columns after {adapter_id} normalization: {missing}. "
                 f"Raw columns: {raw.columns}"
             )
 
@@ -99,11 +106,11 @@ def normalize_raw_frame(
     )
 
 
-def repair_bdf_frame(df: pl.DataFrame, *, policy: str = "warn") -> tuple[pl.DataFrame, list[str]]:
+def repair_bds_frame(df: pl.DataFrame, *, policy: str = "warn") -> tuple[pl.DataFrame, list[str]]:
     warnings: list[str] = []
     if policy not in VALID_REPAIR_POLICY:
         raise ConversionError(f"repair_policy must be one of {sorted(VALID_REPAIR_POLICY)}, got {policy!r}")
-    if df.is_empty() or "Test Time / s" not in df.columns:
+    if df.is_empty() or "test_time_s" not in df.columns:
         return df, warnings
 
     if policy == "none":
@@ -123,29 +130,29 @@ def repair_bdf_frame(df: pl.DataFrame, *, policy: str = "warn") -> tuple[pl.Data
     if df.is_empty():
         return df, warnings
 
-    times = df["Test Time / s"].cast(pl.Float64, strict=False).to_list()
+    times = df["test_time_s"].cast(pl.Float64, strict=False).to_list()
     if any(t is not None and not math.isfinite(float(t)) for t in times):
         warnings.append("Non-finite test times were set to null before repair.")
         df = df.with_columns(
-            pl.when(pl.col("Test Time / s").is_finite())
-            .then(pl.col("Test Time / s"))
+            pl.when(pl.col("test_time_s").is_finite())
+            .then(pl.col("test_time_s"))
             .otherwise(None)
-            .alias("Test Time / s")
-        ).drop_nulls("Test Time / s")
+            .alias("test_time_s")
+        ).drop_nulls("test_time_s")
 
-    times = [float(t) for t in df["Test Time / s"].to_list()]
+    times = [float(t) for t in df["test_time_s"].to_list()]
     if times != sorted(times):
-        df = df.sort("Test Time / s")
-        warnings.append("Rows were sorted by Test Time / s.")
+        df = df.sort("test_time_s")
+        warnings.append("Rows were sorted by test_time_s.")
 
-    times = [float(t) for t in df["Test Time / s"].to_list()]
+    times = [float(t) for t in df["test_time_s"].to_list()]
     if not times:
         return df, warnings
     min_time = min(times)
     if abs(min_time) > 1e-12:
-        df = df.with_columns((pl.col("Test Time / s") - min_time).alias("Test Time / s"))
-        warnings.append("Test Time / s was shifted to start at 0.")
-        times = [float(t) for t in df["Test Time / s"].to_list()]
+        df = df.with_columns((pl.col("test_time_s") - min_time).alias("test_time_s"))
+        warnings.append("test_time_s was shifted to start at 0.")
+        times = [float(t) for t in df["test_time_s"].to_list()]
 
     adjusted = []
     previous = -math.inf
@@ -158,9 +165,23 @@ def repair_bdf_frame(df: pl.DataFrame, *, policy: str = "warn") -> tuple[pl.Data
         adjusted.append(new_value)
         previous = new_value
     if changed:
-        df = df.with_columns(pl.Series("Test Time / s", adjusted))
+        df = df.with_columns(pl.Series("test_time_s", adjusted))
         warnings.append("Duplicate or non-increasing test times were offset by 1e-6 s.")
     return df, warnings
+
+
+def repair_bdf_frame(df: pl.DataFrame, *, policy: str = "warn") -> tuple[pl.DataFrame, list[str]]:
+    """Compatibility wrapper for older callers; repairs BDS canonical fields."""
+    return repair_bds_frame(df, policy=policy)
+
+
+def _canonicalize_alias_map(aliases: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    mapped: dict[str, list[str]] = {}
+    for key, values in aliases.items():
+        canonical = canonical_label_for(key) or key
+        mapped.setdefault(canonical, [])
+        mapped[canonical].extend(values)
+    return {key: tuple(values) for key, values in mapped.items()}
 
 
 def _clean_raw_columns(raw: pl.DataFrame) -> pl.DataFrame:
@@ -210,19 +231,19 @@ def _find_column(columns: list[str], candidates: tuple[str, ...]) -> str | None:
 def _convert_column(series: pl.Series, source: str, label: str) -> tuple[pl.Series, str | None, str | None]:
     unit = _source_unit(source)
     target_unit = LABEL_TO_SPEC[label].unit
-    if label == "Unix Time / s":
+    if label == "unix_time_s":
         numeric = _float_series(series)
         values = numeric.to_list()
         if any(v is not None for v in values):
             return numeric, unit, "numeric"
         parsed = _parse_unix_time(series.to_list())
         return pl.Series(series.name, parsed, dtype=pl.Float64), unit, "parsed UTC timestamp"
-    if label in {"Date Time ISO"}:
+    if label in {"date_time"}:
         return _string_series(series), unit, "string"
     if target_unit == "1":
         return _int_series(series), unit, "integer"
     if target_unit in {"s", "A", "V", "degC", "Ah", "Wh", "W", "ohm"}:
-        if label == "Test Time / s" or label == "Step Time / s":
+        if label == "test_time_s" or label == "step_time_s":
             numeric = _duration_series(series)
         else:
             numeric = _float_series(series)
@@ -239,12 +260,12 @@ def _derive_datetime_columns(
     raw: pl.DataFrame,
     state: NormalizationState,
 ) -> None:
-    if "Unix Time / s" in output:
+    if "unix_time_s" in output:
         return
     source = None
-    if "Date Time ISO" in output:
-        values = output["Date Time ISO"].to_list()
-        source = "Date Time ISO"
+    if "date_time" in output:
+        values = output["date_time"].to_list()
+        source = "date_time"
     else:
         candidates = ("DateTime", "Datetime", "Date Time", "Realtime", "Absolute Time")
         raw_source = _find_column(raw.columns, candidates)
@@ -257,41 +278,41 @@ def _derive_datetime_columns(
     if not any(v is not None for v in unix_values):
         state.warnings.append(f"Could not parse timestamps from {source}.")
         return
-    output["Unix Time / s"] = pl.Series("Unix Time / s", unix_values, dtype=pl.Float64)
+    output["unix_time_s"] = pl.Series("unix_time_s", unix_values, dtype=pl.Float64)
     state.provenance.append(
-        ColumnProvenance("Unix Time / s", source, source_unit=None, transform="parsed UTC timestamp")
+        ColumnProvenance("unix_time_s", source, source_unit=None, transform="parsed UTC timestamp")
     )
 
 
 def _derive_test_time(output: dict[str, pl.Series], state: NormalizationState) -> None:
-    if "Test Time / s" in output:
+    if "test_time_s" in output:
         return
-    if "Unix Time / s" in output:
-        values = list(output["Unix Time / s"].to_list())
+    if "unix_time_s" in output:
+        values = list(output["unix_time_s"].to_list())
         valid = [float(v) for v in values if v is not None and math.isfinite(float(v))]
         if valid:
             start = min(valid)
             derived = [None if v is None else float(v) - start for v in values]
-            output["Test Time / s"] = pl.Series("Test Time / s", derived, dtype=pl.Float64)
+            output["test_time_s"] = pl.Series("test_time_s", derived, dtype=pl.Float64)
             state.provenance.append(
                 ColumnProvenance(
-                    "Test Time / s",
-                    "Unix Time / s",
+                    "test_time_s",
+                    "unix_time_s",
                     source_unit="s",
                     transform="derived elapsed seconds from timestamp",
                 )
             )
             return
-    if "Step Time / s" in output:
-        step = [None if v is None else float(v) for v in output["Step Time / s"].to_list()]
-        output["Test Time / s"] = pl.Series("Test Time / s", _elapsed_from_step_time(step), dtype=pl.Float64)
+    if "step_time_s" in output:
+        step = [None if v is None else float(v) for v in output["step_time_s"].to_list()]
+        output["test_time_s"] = pl.Series("test_time_s", _elapsed_from_step_time(step), dtype=pl.Float64)
         state.warnings.append(
-            "No whole-test time or timestamp was found; reconstructed Test Time / s from step time."
+            "No whole-test time or timestamp was found; reconstructed test_time_s from step time."
         )
         state.provenance.append(
             ColumnProvenance(
-                "Test Time / s",
-                "Step Time / s",
+                "test_time_s",
+                "step_time_s",
                 source_unit="s",
                 transform="cumulative non-negative step-time increments",
             )
@@ -299,12 +320,12 @@ def _derive_test_time(output: dict[str, pl.Series], state: NormalizationState) -
 
 
 def _derive_power(output: dict[str, pl.Series], state: NormalizationState) -> None:
-    if "Power / W" in output:
+    if "power_w" in output:
         return
-    if "Voltage / V" in output and "Current / A" in output:
-        power = output["Voltage / V"] * output["Current / A"]
-        output["Power / W"] = power.alias("Power / W")
-        state.provenance.append(ColumnProvenance("Power / W", "Voltage / V|Current / A", transform="V * I"))
+    if "voltage_v" in output and "current_a" in output:
+        power = output["voltage_v"] * output["current_a"]
+        output["power_w"] = power.alias("power_w")
+        state.provenance.append(ColumnProvenance("power_w", "voltage_v|current_a", transform="V * I"))
 
 
 def _apply_current_sign(
@@ -314,11 +335,12 @@ def _apply_current_sign(
     current_sign: str,
     raw_current_sign: str,
 ) -> None:
-    if current_sign == "preserve" or "Current / A" not in output:
+    if current_sign == "preserve" or "current_a" not in output:
         return
 
     status_source = _find_column(
-        raw.columns, ("Status", "State", "Step Type", "Type", "Mode", "MD", "Command", "Test step")
+        raw.columns,
+        ("Status", "State", "Step State", "Step Type", "Type", "Mode", "MD", "Command", "Test step"),
     )
     if status_source is None:
         if _apply_raw_current_sign(output, state, current_sign, raw_current_sign):
@@ -329,13 +351,13 @@ def _apply_current_sign(
         )
         return
 
-    current = [None if v is None else float(v) for v in output["Current / A"].to_list()]
+    current = [None if v is None else float(v) for v in output["current_a"].to_list()]
     statuses = [_classify_status(v) for v in raw[status_source].to_list()]
     if not any(status in {"charge", "discharge"} for status in statuses):
         if any(status == "rest" for status in statuses):
             state.provenance.append(
                 ColumnProvenance(
-                    "Current / A",
+                    "current_a",
                     status_source,
                     transform=f"current sign preserved for rest-only rows under {current_sign}",
                 )
@@ -369,9 +391,9 @@ def _apply_current_sign(
             signed.append(-value)
         else:
             signed.append(value)
-    output["Current / A"] = pl.Series("Current / A", signed, dtype=pl.Float64)
+    output["current_a"] = pl.Series("current_a", signed, dtype=pl.Float64)
     state.provenance.append(
-        ColumnProvenance("Current / A", status_source, transform=f"current sign normalized to {current_sign}")
+        ColumnProvenance("current_a", status_source, transform=f"current sign normalized to {current_sign}")
     )
     unknown_count = sum(status is None for status in statuses)
     if unknown_count:
@@ -394,10 +416,10 @@ def _apply_raw_current_sign(
     if raw_current_sign not in {"charge-positive", "discharge-positive"}:
         return False
     if raw_current_sign != current_sign:
-        output["Current / A"] = (-output["Current / A"]).alias("Current / A")
+        output["current_a"] = (-output["current_a"]).alias("current_a")
         state.provenance.append(
             ColumnProvenance(
-                "Current / A",
+                "current_a",
                 "adapter raw_current_sign",
                 transform=f"flipped from {raw_current_sign} to {current_sign}",
             )
@@ -426,7 +448,7 @@ def _parse_unix_time(values: list[Any]) -> list[float | None]:
         if pd.isna(value):
             unix.append(None)
         else:
-            unix.append(value.to_pydatetime().replace(tzinfo=UTC).timestamp())
+            unix.append(value.to_pydatetime().replace(tzinfo=timezone.utc).timestamp())
 
     finite = [v for v in unix if v is not None]
     if finite:
@@ -530,6 +552,29 @@ def _parse_duration(value: Any) -> float | None:
 def _source_unit(source: str) -> str | None:
     text = source.strip()
     slug = _slug(text)
+    suffix_units = (
+        ("microamps", "µA"),
+        ("microamp", "µA"),
+        ("milliamps", "mA"),
+        ("milliamp", "mA"),
+        ("millivolts", "mV"),
+        ("millivolt", "mV"),
+        ("milliohms", "mohm"),
+        ("milliohm", "mohm"),
+        ("microa", "µA"),
+        ("millia", "mA"),
+        ("milliv", "mV"),
+        ("mah", "mAh"),
+        ("mwh", "mWh"),
+        ("mohm", "mohm"),
+        ("ma", "mA"),
+        ("mv", "mV"),
+        ("ah", "Ah"),
+        ("wh", "Wh"),
+    )
+    for suffix, unit in suffix_units:
+        if slug.endswith(suffix):
+            return unit
     if "millisecond" in slug or slug.endswith("milliseconds") or slug.endswith("msec"):
         return "ms"
     if slug.endswith("second") or slug.endswith("seconds"):
@@ -544,7 +589,7 @@ def _source_unit(source: str) -> str | None:
     if not match:
         return None
     unit = next(group for group in match.groups() if group)
-    return (
+    normalized = (
         unit.replace("Ω", "ohm")
         .replace("Ω", "ohm")
         .replace("°C", "degC")
@@ -558,6 +603,14 @@ def _source_unit(source: str) -> str | None:
         .replace("Ohms", "ohm")
         .replace("Ohm", "ohm")
     )
+    lower = normalized.strip().lower()
+    if lower in {"decimal hours", "hours in hh:mm:ss.xxx"}:
+        return "h"
+    if lower in {"seconds", "second"}:
+        return "s"
+    if lower in {"minutes", "minute"}:
+        return "min"
+    return normalized
 
 
 def _unit_factor(source_unit: str | None, target_unit: str) -> float:
@@ -590,7 +643,11 @@ def _unit_factor(source_unit: str | None, target_unit: str) -> float:
         ("hr", "s"): 3600.0,
         ("hour", "s"): 3600.0,
         ("hours", "s"): 3600.0,
+        ("decimalhours", "s"): 3600.0,
+        ("hoursinhh:mm:ss.xxx", "s"): 1.0,
         ("min", "s"): 60.0,
+        ("minute", "s"): 60.0,
+        ("minutes", "s"): 60.0,
         ("ms", "s"): 1e-3,
         ("sec", "s"): 1.0,
         ("secs", "s"): 1.0,
@@ -633,7 +690,7 @@ def _slug(value: str) -> str:
 
 def _repair_operations(df: pl.DataFrame) -> list[str]:
     operations: list[str] = []
-    if df.is_empty() or "Test Time / s" not in df.columns:
+    if df.is_empty() or "test_time_s" not in df.columns:
         return operations
 
     required_present = [c for c in REQUIRED_COLUMNS if c in df.columns]
@@ -644,24 +701,24 @@ def _repair_operations(df: pl.DataFrame) -> list[str]:
             operations.append(f"Would drop {dropped} rows with null required values.")
 
     try:
-        times_series = df["Test Time / s"].cast(pl.Float64, strict=False)
+        times_series = df["test_time_s"].cast(pl.Float64, strict=False)
     except Exception:
-        operations.append("Would coerce Test Time / s to numeric and drop invalid rows.")
+        operations.append("Would coerce test_time_s to numeric and drop invalid rows.")
         return operations
 
     times_raw = times_series.to_list()
     non_finite = sum(t is not None and not math.isfinite(float(t)) for t in times_raw)
     if non_finite:
-        operations.append(f"Would drop {non_finite} rows with non-finite Test Time / s.")
+        operations.append(f"Would drop {non_finite} rows with non-finite test_time_s.")
 
     times = [float(t) for t in times_raw if t is not None and math.isfinite(float(t))]
     if not times:
         return operations
     if times != sorted(times):
-        operations.append("Would sort rows by Test Time / s.")
+        operations.append("Would sort rows by test_time_s.")
     min_time = min(times)
     if abs(min_time) > 1e-12:
-        operations.append("Would shift Test Time / s to start at 0.")
+        operations.append("Would shift test_time_s to start at 0.")
     sorted_times = sorted(times)
     if any(b <= a for a, b in pairwise(sorted_times)):
         operations.append("Would offset duplicate or non-increasing test times by 1e-6 s.")

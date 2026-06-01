@@ -1,0 +1,4 @@
+Data_Point,Test_Time(s),Cycle_Index,Step_Index,Current(A),Voltage(V),Charge_Capacity(Ah),Discharge_Capacity(Ah)
+1,0,1,1,1.0,3.40,0.000,0.000
+2,10,1,1,1.0,3.50,0.010,0.000
+3,20,1,2,-1.5,3.45,0.010,0.006

@@ -1,0 +1,4 @@
+DateTime,Cycle ID,Step ID,Record ID,Time(h:min:s.ms),Voltage(V),Current(mA),Capacitance_Chg(mAh),Capacitance_DChg(mAh),Status
+2026-01-01 00:00:00,1,1,1,0:00:00.0,3.50,1000,0,0,C
+2026-01-01 00:00:10,1,1,2,0:00:10.0,3.60,1000,10,0,C
+2026-01-01 00:00:20,1,2,3,0:00:00.0,3.55,1000,10,5,D

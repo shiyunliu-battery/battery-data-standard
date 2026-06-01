@@ -1,4 +1,4 @@
-"""Validation for BDF-style data frames."""
+"""Validation for normalized time-series data frames."""
 
 from __future__ import annotations
 
@@ -8,23 +8,23 @@ from itertools import pairwise
 import polars as pl
 
 from .reports import ValidationIssue, ValidationReport
-from .schema import BDF_SCHEMA_VERSION, OPTIONAL_COLUMNS, REQUIRED_COLUMNS
+from .schema import BDS_SCHEMA_VERSION, OPTIONAL_COLUMNS, REQUIRED_COLUMNS, SUPPORTED_SCHEMA_VERSIONS
 
 
 def validate(
     df: pl.DataFrame,
-    schema_version: str = BDF_SCHEMA_VERSION,
+    schema_version: str = BDS_SCHEMA_VERSION,
     strict: bool = True,
 ) -> ValidationReport:
     issues: list[ValidationIssue] = []
     columns = list(df.columns)
 
-    if schema_version != BDF_SCHEMA_VERSION:
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         issues.append(
             ValidationIssue(
                 "error",
                 "unsupported-schema-version",
-                f"Unsupported schema version {schema_version}; expected {BDF_SCHEMA_VERSION}.",
+                f"Unsupported schema version {schema_version}; expected {BDS_SCHEMA_VERSION}.",
             )
         )
 
@@ -49,7 +49,7 @@ def validate(
                     "error", "null-required-values", f"{column} contains {nulls} null values.", column
                 )
             )
-        if column in {"Test Time / s", "Voltage / V", "Current / A"}:
+        if column in {"test_time_s", "voltage_v", "current_a"}:
             casted = df[column].cast(pl.Float64, strict=False)
             failed = casted.null_count() - df[column].null_count()
             if failed > 0:
@@ -69,15 +69,15 @@ def validate(
                     )
                 )
 
-    if "Test Time / s" in columns and not df.is_empty():
-        times = [float(v) for v in df["Test Time / s"].cast(pl.Float64, strict=False).drop_nulls().to_list()]
+    if "test_time_s" in columns and not df.is_empty():
+        times = [float(v) for v in df["test_time_s"].cast(pl.Float64, strict=False).drop_nulls().to_list()]
         if len(times) != df.height:
             issues.append(
                 ValidationIssue(
                     "error",
                     "invalid-test-time",
-                    "Test Time / s could not be parsed for every row.",
-                    "Test Time / s",
+                    "test_time_s could not be parsed for every row.",
+                    "test_time_s",
                 )
             )
         elif any(not math.isfinite(t) for t in times):
@@ -85,8 +85,8 @@ def validate(
                 ValidationIssue(
                     "error",
                     "non-finite-test-time",
-                    "Test Time / s contains non-finite values.",
-                    "Test Time / s",
+                    "test_time_s contains non-finite values.",
+                    "test_time_s",
                 )
             )
         elif any(b <= a for a, b in pairwise(times)):
@@ -94,8 +94,8 @@ def validate(
                 ValidationIssue(
                     "error" if strict else "warning",
                     "non-increasing-test-time",
-                    "Test Time / s must be strictly increasing.",
-                    "Test Time / s",
+                    "test_time_s must be strictly increasing.",
+                    "test_time_s",
                 )
             )
 

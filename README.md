@@ -6,18 +6,18 @@
 [![Package](https://img.shields.io/badge/package-bds-blue.svg)](https://pypi.org/project/battery-data-standard/)
 
 `battery-data-standard` is a Python library and command-line tool for converting
-battery cycler exports into a consistent BDF-style tabular representation. It is
+battery cycler exports into a consistent tabular representation. It is
 intended for laboratories, battery test teams, and data pipelines that need a
 repeatable path from vendor files to analysis-ready CSV or Parquet outputs.
 
-The package is vendor-neutral. It is not certified by any cycler vendor or by
-the Battery Data Alliance. Adapter support describes behavior implemented and
+The package is vendor-neutral and independent. It is not certified by any cycler
+vendor or standards body. Adapter support describes behavior implemented and
 validated by this project; users should verify representative exports from their
 own cycler software before using the package in automated production workflows.
 
 ## Installation
 
-Python 3.12 or newer is required.
+Python 3.10 or newer is required.
 
 ```bash
 pip install battery-data-standard
@@ -28,6 +28,7 @@ Optional extras are available for additional input formats:
 ```bash
 pip install "battery-data-standard[yaml]"
 pip install "battery-data-standard[matlab]"
+pip install "battery-data-standard[mpr]"
 ```
 
 The package installs the `bds` command and exposes both the full package name
@@ -43,11 +44,12 @@ import bds
 
 The package provides:
 
-- conversion of supported battery cycler time-series exports to BDF-style CSV or
+- conversion of supported battery cycler time-series exports to standardized CSV or
   Parquet files;
 - conversion of supported EIS tables to a standardized EIS table;
 - cycler detection, data-kind detection, validation, conversion reports, and
   batch manifests;
+- intake audit reports with file-level conversion quality scores;
 - archive-aware batch conversion for directories, zip archives, and tar
   archives;
 - optional profile files for lab-specific column naming.
@@ -72,13 +74,20 @@ bds detect raw_export.csv
 Convert a time-series file:
 
 ```bash
-bds convert raw_export.csv normalized.bdf.csv --cycler auto --report report.json
+bds convert raw_export.csv normalized.bds.csv --cycler auto --report report.json
+```
+
+Export directly to a downstream staging format:
+
+```bash
+bds convert raw_export.csv pybamm_drive_cycle.csv --target pybamm
+bds convert raw_export.csv pyprobe_staging.parquet --target pyprobe --format parquet
 ```
 
 Validate a converted file:
 
 ```bash
-bds validate normalized.bdf.csv
+bds validate normalized.bds.csv
 ```
 
 Convert a directory or archive and write a JSONL manifest:
@@ -87,6 +96,17 @@ Convert a directory or archive and write a JSONL manifest:
 bds batch raw_exports normalized_exports --recursive --manifest manifest.jsonl
 bds batch raw_exports.zip normalized_exports --manifest manifest.jsonl
 ```
+
+Audit a raw folder before committing to conversion:
+
+```bash
+bds audit raw_exports --recursive --json audit.json --html audit.html
+```
+
+The audit report scores each file and highlights conversion failures, missing
+required fields, unit conversions, time-axis repairs, current-sign evidence,
+duplicate timestamps, non-monotonic time, suspicious flat voltage/current, and
+cycle/step anomalies.
 
 Inspect runtime adapter metadata and the pinned schema:
 
@@ -132,7 +152,7 @@ df = bds.read(
 Use `current_sign="preserve"` when downstream analysis should keep the raw
 charge/discharge sign convention from the instrument. Use
 `repair_policy="repair"` when the pipeline accepts documented normalizations
-such as shifting `Test Time / s` to start at zero or sorting non-monotonic time
+such as shifting elapsed test time to start at zero or sorting non-monotonic time
 values.
 
 Use an explicit cycler when the source format is known:
@@ -146,10 +166,17 @@ Convert a file and keep the conversion report:
 ```python
 report = bds.convert(
     "raw_export.csv",
-    "normalized.bdf.csv",
+    "normalized.bds.csv",
     cycler="auto",
     report_path="report.json",
 )
+```
+
+Write a downstream staging table by selecting an export target:
+
+```python
+bds.convert("raw_export.csv", "pybamm_drive_cycle.csv", target="pybamm")
+bds.convert("raw_export.csv", "cellpy_staging.csv", target="cellpy")
 ```
 
 Read data and report information in memory:
@@ -167,39 +194,40 @@ cycles = bds.summarize_cycles(df)
 
 ## Output Model
 
-The converter standardizes supported cycler exports into a time-series table.
-Every successful BDF time-series conversion must contain three required fields:
+The converter standardizes supported cycler exports into a BDS time-series
+table. Every successful default export contains three required fields:
 
 | Field | Unit | Description |
 | --- | --- | --- |
-| `Test Time / s` | s | Elapsed time from the start of the test. |
-| `Voltage / V` | V | Measured cell or channel voltage. |
-| `Current / A` | A | Measured current. |
+| `Test Time (s)` | s | Elapsed time from the start of the test. |
+| `Voltage (V)` | V | Measured cell or channel voltage. |
+| `Current (A)` | A | Measured current. |
 
 Additional fields, such as cycle number, step number, capacity, energy,
 temperature, power, and internal resistance, are included when they are available
 in the source file.
 
-The internal dataframe uses canonical BDF-style labels. Exported CSV and Parquet
-files use easier-to-read labels, for example `Test Time (s)`, `Voltage (V)`, and
-`Current (A)`.
+The default BDS CSV and Parquet exports use user-facing labels with units in
+parentheses. Lower-level adapter data may use internal labels; prefer
+`bds convert` or `to_export_frame(..., target="bds")` for public handoff.
 
 ## Supported Format Families
 
-The package includes adapters for NEWARE, Arbin, Maccor, BioLogic, Novonix,
-BaSyTec, LANDT, and generic tabular exports. Generic readers support delimited
-text, Excel, MATLAB, and Parquet inputs where the file contains or can be mapped
-to time, voltage, and current columns.
+The package includes adapters for NEWARE, Arbin, Maccor, BioLogic, Repower, PEC,
+Novonix, BaSyTec, LANDT, and generic tabular exports. Generic readers support
+delimited text, Excel, MATLAB, and Parquet inputs where the file contains or can
+be mapped to time, voltage, and current columns.
 
-BioLogic `.mpt` text exports are supported. Binary BioLogic `.mpr` files are not
-supported; export `.mpt` text files from EC-Lab before conversion.
+BioLogic `.mpt` text exports are supported by default. Binary BioLogic `.mpr`
+files are supported through the optional `mpr` extra, which installs the
+`galvani` backend.
 
 See [docs/supported-formats.md](docs/supported-formats.md) for adapter scope and
 support-tier definitions.
 
 ## EIS Data
 
-EIS files use a separate standardized table from row-wise BDF time-series data.
+EIS files use a separate standardized table from row-wise time-series data.
 Use EIS-specific commands or API functions for known impedance files:
 
 ```bash
@@ -214,7 +242,8 @@ report = bds.convert_eis("impedance.csv", "normalized.eis.csv")
 
 `read()` and `convert()` are time-series entry points. `batch` and
 `batch_convert()` can route mixed directories and archives that contain
-time-series files, EIS files, and unsupported helper files.
+time-series files, EIS files, including Gamry `.DTA` ZCURVE files, and
+unsupported helper files.
 
 ## Profiles
 
@@ -224,9 +253,9 @@ are supported by the base installation. YAML profiles require the `yaml` extra.
 ```json
 {
   "columns": {
-    "Test Time / s": "time_seconds",
-    "Voltage / V": "cell_voltage",
-    "Current / A": "cell_current"
+    "test_time": "time_seconds",
+    "voltage": "cell_voltage",
+    "current": "cell_current"
   }
 }
 ```
@@ -234,7 +263,7 @@ are supported by the base installation. YAML profiles require the `yaml` extra.
 Use a profile from the CLI:
 
 ```bash
-bds convert lab_export.csv normalized.bdf.csv --cycler generic --profile profile.json
+bds convert lab_export.csv normalized.bds.csv --cycler generic --profile profile.json
 ```
 
 ## Current Sign Convention
@@ -265,12 +294,11 @@ Public documentation is in the `docs` directory:
 - [Python API reference](docs/api-reference.md)
 - [Supported formats](docs/supported-formats.md)
 - [Export template](docs/export-template.md)
+- [Export targets](docs/export-template.md#export-targets)
 - [Schema compatibility](docs/schema-compatibility.md)
+- [Ecosystem integrations](docs/integrations.md)
 
 ## License and Attribution
 
-This project is distributed under the MIT License.
-
-The package targets a BDF-oriented output schema inspired by the Battery Data
-Format project from the Battery Data Alliance. This project is not an official
-Battery Data Alliance project and is not certified by the Battery Data Alliance.
+This project is distributed under the MIT License. See [NOTICE.md](NOTICE.md)
+for the project independence notice.

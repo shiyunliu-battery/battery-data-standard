@@ -17,6 +17,8 @@ from .landt import LandtAdapter
 from .maccor import MaccorAdapter
 from .neware import NewareAdapter
 from .novonix import NovonixAdapter
+from .pec import PecAdapter
+from .repower import RepowerAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,8 @@ _ADAPTERS: tuple[Adapter, ...] = (
     ArbinAdapter(),
     MaccorAdapter(),
     BiologicAdapter(),
+    RepowerAdapter(),
+    PecAdapter(),
     NovonixAdapter(),
     BasytecAdapter(),
     LandtAdapter(),
@@ -58,6 +62,8 @@ def get_adapter(
         "maccor": "maccor",
         "biologic": "biologic",
         "bio-logic": "biologic",
+        "repower": "repower",
+        "pec": "pec",
         "novonix": "novonix",
         "basytec": "basytec",
         "landt": "landt",

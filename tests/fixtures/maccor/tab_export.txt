@@ -1,0 +1,6 @@
+Today's Date:	21 May 2026	Date of Test:	21 May 2026, 09:00:00 AM
+Filename:	anonymous_maccor_fixture
+Rec	Cycle	Step	Test Time	Step Time	Capacity	Energy	Current	Voltage	MD	DPT Time
+1	1	1	0d 00:00:00	0d 00:00:00	0	0	0.100	3.200	C	05/21/2026 9:00:00 AM
+2	1	1	0d 00:00:10	0d 00:00:10	0	0	0.100	3.210	C	05/21/2026 9:00:10 AM
+3	1	2	0d 00:00:20	0d 00:00:00	0	0	-0.100	3.205	D	05/21/2026 9:00:20 AM
