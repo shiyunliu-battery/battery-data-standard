@@ -14,3 +14,7 @@ coverage.xml
 htmlcov/
 examples/output/
 tmp/
+
+# Local real-data probes used for notebook validation; do not publish datasets.
+tests/*.mat
+tests/*.xlsx

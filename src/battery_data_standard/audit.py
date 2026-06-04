@@ -14,9 +14,11 @@ from typing import Any
 import polars as pl
 
 from .api import detect, detect_kind, read_eis, read_with_report
+from .archive import is_supported_source_path
 from .eis import validate_eis
 from .io import write_json
 from .reports import ColumnProvenance, ValidationIssue
+from .schema import OPTIONAL_COLUMNS, REQUIRED_COLUMNS
 from .validation import validate
 
 
@@ -46,6 +48,7 @@ class AuditRecord:
     detection_confidence: float | None = None
     kind_confidence: float | None = None
     missing_required_columns: list[str] = field(default_factory=list)
+    completeness: dict[str, Any] = field(default_factory=dict)
     unit_repairs: list[dict[str, Any]] = field(default_factory=list)
     repair_operations: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -174,23 +177,26 @@ def audit_file(
         )
         validation = validate(df, strict=False)
         checks = _quality_checks(df)
-        issues.extend(_validation_issues(validation.issues))
+        validation_issues = _quality_scored_validation_issues(validation.issues)
+        issues.extend(_validation_issues(validation_issues))
         issues.extend(_check_issues(checks))
         missing = [
             issue.column
             for issue in validation.issues
             if issue.code == "missing-required-column" and issue.column is not None
         ]
+        completeness = _completeness(validation.issues)
         unit_repairs = _unit_repairs(report.provenance)
         current_evidence = _current_sign_evidence(report.provenance, report.warnings)
         score = _score_record(
             status="converted",
             detection_confidence=report.detection_confidence or detection.confidence,
-            validation_issues=validation.issues,
+            validation_issues=validation_issues,
             audit_issues=issues,
             warnings=report.warnings,
             repair_operations=report.repair_operations,
             unit_repairs=unit_repairs,
+            current_sign_evidence=current_evidence,
         )
         return AuditRecord(
             input_path=str(input_path),
@@ -206,6 +212,7 @@ def audit_file(
             columns=report.columns,
             detection_confidence=report.detection_confidence or detection.confidence,
             missing_required_columns=missing,
+            completeness=completeness,
             unit_repairs=unit_repairs,
             repair_operations=report.repair_operations,
             warnings=report.warnings,
@@ -247,6 +254,7 @@ def _audit_eis_file(
             warnings=[],
             repair_operations=[],
             unit_repairs=[],
+            current_sign_evidence=None,
         )
         return AuditRecord(
             input_path=str(input_path),
@@ -283,7 +291,54 @@ def _audit_sources(path: Path, *, recursive: bool) -> list[Path]:
     if not path.exists():
         raise FileNotFoundError(f"Input path does not exist: {path}")
     pattern = "**/*" if recursive else "*"
-    return sorted(item for item in path.glob(pattern) if item.is_file())
+    return sorted(item for item in path.glob(pattern) if item.is_file() and _is_audit_source(item))
+
+
+_AUDIT_INPUT_SUFFIXES = {
+    ".csv",
+    ".txt",
+    ".tsv",
+    ".xlsx",
+    ".xls",
+    ".mpt",
+    ".mpr",
+    ".dta",
+    ".mat",
+    ".parquet",
+}
+
+_AUDIT_HELPER_SUFFIXES = (
+    ".conversion-report.json",
+    ".metadata.json",
+    ".manifest.jsonl",
+    ".manifest.json",
+)
+
+_AUDIT_HELPER_NAME_MARKERS = (
+    "readme",
+    "manifest",
+    "metadata",
+    "label",
+    "labels",
+    "summary",
+    "datasheet",
+    "specification",
+    "manufacturer",
+    "figure",
+    "plot",
+    "codebook",
+    "schedule",
+    "procedure",
+)
+
+
+def _is_audit_source(path: Path) -> bool:
+    name = path.name.lower()
+    if name.endswith(_AUDIT_HELPER_SUFFIXES):
+        return False
+    if any(marker in name for marker in _AUDIT_HELPER_NAME_MARKERS):
+        return False
+    return is_supported_source_path(path, _AUDIT_INPUT_SUFFIXES)
 
 
 def _quality_checks(df: pl.DataFrame) -> dict[str, Any]:
@@ -342,6 +397,32 @@ def _float_values(series: pl.Series) -> list[float | None]:
 
 def _validation_issues(issues: list[ValidationIssue]) -> list[AuditIssue]:
     return [AuditIssue(issue.level, issue.code, issue.message, issue.column) for issue in issues]
+
+
+def _quality_scored_validation_issues(issues: list[ValidationIssue]) -> list[ValidationIssue]:
+    return [issue for issue in issues if issue.code != "missing-optional-column"]
+
+
+def _completeness(issues: list[ValidationIssue]) -> dict[str, Any]:
+    required_missing = sorted(
+        issue.column for issue in issues if issue.code == "missing-required-column" and issue.column
+    )
+    optional_missing = sorted(
+        issue.column for issue in issues if issue.code == "missing-optional-column" and issue.column
+    )
+    required_total = len(REQUIRED_COLUMNS)
+    optional_total = len(OPTIONAL_COLUMNS)
+    required_present = required_total - len(required_missing)
+    optional_present = optional_total - len(optional_missing)
+    return {
+        "required_present": required_present,
+        "required_total": required_total,
+        "required_missing": required_missing,
+        "optional_present": optional_present,
+        "optional_total": optional_total,
+        "optional_missing": optional_missing,
+        "optional_coverage": round(optional_present / optional_total, 3) if optional_total else 1.0,
+    }
 
 
 def _check_issues(checks: dict[str, Any]) -> list[AuditIssue]:
@@ -417,9 +498,11 @@ def _score_record(
     warnings: list[str],
     repair_operations: list[str],
     unit_repairs: list[dict[str, Any]],
+    current_sign_evidence: str | None,
 ) -> int:
     if status == "unsupported":
         return 0
+    validation_issues = _quality_scored_validation_issues(validation_issues)
     score = 92 if status == "eis" else 100
     if detection_confidence is not None:
         if detection_confidence < 0.2:
@@ -435,7 +518,8 @@ def _score_record(
             score -= 5
     score -= min(15, len(warnings) * 3)
     score -= min(20, len(repair_operations) * 5)
-    score -= min(8, len(unit_repairs) * 2)
+    if current_sign_evidence and current_sign_evidence.startswith("raw current mapped without explicit"):
+        score -= 5
     return max(0, min(100, round(score)))
 
 
@@ -494,7 +578,7 @@ def _write_html_report(report: AuditReport, path: str | Path) -> None:
     table {{ width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }}
     th, td {{ border-bottom: 1px solid #d8dee4; padding: 8px; text-align: left; vertical-align: top; }}
     th {{ background: #f6f8fa; }}
-    .grade-A {{ color: #0f766e; font-weight: bold; }}
+    .grade-A {{ color: #1d4ed8; font-weight: bold; }}
     .grade-B {{ color: #2563eb; font-weight: bold; }}
     .grade-C {{ color: #ca8a04; font-weight: bold; }}
     .grade-D, .grade-F {{ color: #b91c1c; font-weight: bold; }}
@@ -527,6 +611,7 @@ def _write_html_report(report: AuditReport, path: str | Path) -> None:
         <th>Cycler</th>
         <th>Score</th>
         <th>Rows</th>
+        <th>Optional Coverage</th>
         <th>Issues</th>
         <th>Repairs / Sign Evidence</th>
       </tr>
@@ -546,6 +631,8 @@ def _html_record_row(record: AuditRecord) -> str:
     repairs = "; ".join(record.repair_operations[:3])
     if record.current_sign_evidence:
         repairs = f"{repairs}; {record.current_sign_evidence}" if repairs else record.current_sign_evidence
+    optional_coverage = record.completeness.get("optional_coverage")
+    optional_text = "" if optional_coverage is None else f"{float(optional_coverage) * 100:.0f}%"
     score = f'<span class="grade-{html.escape(record.quality_grade)}">{record.quality_score} ({record.quality_grade})</span>'
     return f"""<tr>
   <td><code>{html.escape(record.relative_path)}</code></td>
@@ -554,6 +641,7 @@ def _html_record_row(record: AuditRecord) -> str:
   <td>{html.escape(record.cycler or "")}</td>
   <td>{score}</td>
   <td>{"" if record.rows is None else record.rows}</td>
+  <td>{html.escape(optional_text)}</td>
   <td>{html.escape(issues)}</td>
   <td>{html.escape(repairs)}</td>
 </tr>"""

@@ -17,7 +17,13 @@ from .archive import batch_sources
 from .eis import convert_eis as _convert_eis
 from .eis import read_eis as _read_eis
 from .eis import validate_eis as _validate_eis
-from .exceptions import BatteryDataStandardError, ConversionError, FileIOError, ValidationFailed
+from .exceptions import (
+    BatteryDataStandardError,
+    ConversionError,
+    FileIOError,
+    UnsupportedFormatError,
+    ValidationFailed,
+)
 from .export import (
     EXPORT_FORMAT_VERSION,
     looks_like_export_frame,
@@ -35,6 +41,7 @@ from .kind import detect_kind as _detect_kind
 from .profiles import load_profile
 from .reports import ConversionReport, DetectionResult, ValidationReport
 from .schema import BDS_SCHEMA_VERSION
+from .time_sampling import apply_time_sampling_policy
 from .validation import validate
 
 logger = logging.getLogger(__name__)
@@ -101,6 +108,11 @@ def read(
     keep_raw: bool = False,
     current_sign: str = "charge-positive",
     repair_policy: str = "warn",
+    time_sampling_policy: str = "repair",
+    time_sampling_interval_s: float | None = None,
+    time_sampling_interpolation: str = "linear",
+    time_sampling_tolerance: float = 0.1,
+    time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
 ) -> pl.DataFrame:
@@ -127,6 +139,10 @@ def read(
         ``"charge-positive"``, ``"discharge-positive"``, or ``"preserve"``.
     repair_policy:
         ``"none"``, ``"warn"``, or ``"repair"`` for repairable table issues.
+    time_sampling_policy:
+        ``"none"``, ``"warn"``, or ``"repair"`` for missing samples on a regular
+        ``test_time_s`` grid. The default repairs only when a regular sampling
+        interval is detected or explicitly provided.
 
     Returns
     -------
@@ -141,6 +157,11 @@ def read(
         keep_raw=keep_raw,
         current_sign=current_sign,
         repair_policy=repair_policy,
+        time_sampling_policy=time_sampling_policy,
+        time_sampling_interval_s=time_sampling_interval_s,
+        time_sampling_interpolation=time_sampling_interpolation,
+        time_sampling_tolerance=time_sampling_tolerance,
+        time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
         detection_threshold=detection_threshold,
         sheet=sheet,
     )
@@ -155,6 +176,11 @@ def read_with_report(
     keep_raw: bool = False,
     current_sign: str = "charge-positive",
     repair_policy: str = "warn",
+    time_sampling_policy: str = "repair",
+    time_sampling_interval_s: float | None = None,
+    time_sampling_interpolation: str = "linear",
+    time_sampling_tolerance: float = 0.1,
+    time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
 ) -> tuple[pl.DataFrame, ConversionReport]:
@@ -198,7 +224,26 @@ def read_with_report(
         raise FileIOError(f"Could not read {input_path}: {exc}") from exc
     except Exception as exc:
         raise ConversionError(f"Could not convert {input_path}: {exc}") from exc
+
+    sampling = apply_time_sampling_policy(
+        result.data,
+        policy=time_sampling_policy,
+        expected_interval_s=time_sampling_interval_s,
+        interpolation_method=time_sampling_interpolation,
+        tolerance=time_sampling_tolerance,
+        max_inserted_rows=time_sampling_max_inserted_rows,
+    )
+    result.data = sampling.data
+    result.warnings.extend(sampling.warnings)
+    if sampling.repair_operations:
+        repair_operations = list(result.metadata.get("repair_operations", []))
+        repair_operations.extend(sampling.repair_operations)
+        result.metadata["repair_operations"] = repair_operations
+    result.metadata["time_sampling"] = sampling.metadata
+    result.metadata["output_rows"] = result.data.height
+
     validation = validate(result.data, strict=strict)
+    validation.issues.extend(sampling.validation_issues)
     if strict and not validation.valid:
         raise ValidationFailed(validation)
     report = ConversionReport(
@@ -238,8 +283,14 @@ def convert(
     keep_raw: bool = False,
     current_sign: str = "charge-positive",
     repair_policy: str = "warn",
+    time_sampling_policy: str = "repair",
+    time_sampling_interval_s: float | None = None,
+    time_sampling_interpolation: str = "linear",
+    time_sampling_tolerance: float = 0.1,
+    time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
     report_path: str | Path | None = None,
+    report_formats: tuple[str, ...] | list[str] | str | None = None,
     write_sidecars: bool = False,
     sheet: str | int | None = None,
     target: str = "bds",
@@ -262,6 +313,11 @@ def convert(
         keep_raw=keep_raw,
         current_sign=current_sign,
         repair_policy=repair_policy,
+        time_sampling_policy=time_sampling_policy,
+        time_sampling_interval_s=time_sampling_interval_s,
+        time_sampling_interpolation=time_sampling_interpolation,
+        time_sampling_tolerance=time_sampling_tolerance,
+        time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
         detection_threshold=detection_threshold,
         sheet=sheet,
     )
@@ -284,7 +340,12 @@ def convert(
 
     try:
         if report_path is not None:
-            write_json(report_path, report.to_dict())
+            _write_conversion_report_outputs(
+                report,
+                output_path,
+                report_path,
+                report_formats=report_formats,
+            )
         elif write_sidecars:
             write_json(
                 output_path.with_suffix(output_path.suffix + ".conversion-report.json"),
@@ -309,6 +370,11 @@ def convert_neware_groups(
     keep_raw: bool = False,
     current_sign: str = "charge-positive",
     repair_policy: str = "warn",
+    time_sampling_policy: str = "repair",
+    time_sampling_interval_s: float | None = None,
+    time_sampling_interpolation: str = "linear",
+    time_sampling_tolerance: float = 0.1,
+    time_sampling_max_inserted_rows: int = 100_000,
     write_sidecars: bool = True,
     target: str = "bds",
 ) -> list[ConversionReport]:
@@ -337,7 +403,24 @@ def convert_neware_groups(
             repair_policy=repair_policy,
             options={"neware_record_paths": list(group.get("record_paths", []))},
         )
+        sampling = apply_time_sampling_policy(
+            result.data,
+            policy=time_sampling_policy,
+            expected_interval_s=time_sampling_interval_s,
+            interpolation_method=time_sampling_interpolation,
+            tolerance=time_sampling_tolerance,
+            max_inserted_rows=time_sampling_max_inserted_rows,
+        )
+        result.data = sampling.data
+        result.warnings.extend(sampling.warnings)
+        if sampling.repair_operations:
+            repair_operations = list(result.metadata.get("repair_operations", []))
+            repair_operations.extend(sampling.repair_operations)
+            result.metadata["repair_operations"] = repair_operations
+        result.metadata["time_sampling"] = sampling.metadata
+        result.metadata["output_rows"] = result.data.height
         validation = validate(result.data, strict=strict)
+        validation.issues.extend(sampling.validation_issues)
         if strict and not validation.valid:
             raise ValidationFailed(validation)
 
@@ -398,6 +481,11 @@ def batch_convert(
     keep_raw: bool = False,
     current_sign: str = "charge-positive",
     repair_policy: str = "warn",
+    time_sampling_policy: str = "repair",
+    time_sampling_interval_s: float | None = None,
+    time_sampling_interpolation: str = "linear",
+    time_sampling_tolerance: float = 0.1,
+    time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
     write_sidecars: bool = False,
     sheet: str | int | None = None,
@@ -435,6 +523,11 @@ def batch_convert(
                         keep_raw=keep_raw,
                         current_sign=current_sign,
                         repair_policy=repair_policy,
+                        time_sampling_policy=time_sampling_policy,
+                        time_sampling_interval_s=time_sampling_interval_s,
+                        time_sampling_interpolation=time_sampling_interpolation,
+                        time_sampling_tolerance=time_sampling_tolerance,
+                        time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
                         detection_threshold=detection_threshold,
                         write_sidecars=write_sidecars,
                         sheet=sheet,
@@ -534,6 +627,80 @@ def _set_export_report_metadata(
     report.metadata["export_target"] = normalize_export_target(target)
     report.metadata["internal_columns"] = list(internal_df.columns)
     report.metadata["export_columns"] = list(export_df.columns)
+
+
+def _write_conversion_report_outputs(
+    report: ConversionReport,
+    output_path: Path,
+    report_path: str | Path,
+    *,
+    report_formats: tuple[str, ...] | list[str] | str | None,
+) -> None:
+    from .reporting import REPORT_FORMATS, write_conversion_report
+
+    paths = _conversion_report_paths(
+        output_path,
+        report_path,
+        report_formats=_normalize_report_formats(report_formats),
+        supported_formats=REPORT_FORMATS,
+    )
+    report.metadata["report_outputs"] = {fmt: str(path) for fmt, path in paths.items()}
+    for path in paths.values():
+        write_conversion_report(report, path)
+
+
+def _conversion_report_paths(
+    output_path: Path,
+    report_path: str | Path,
+    *,
+    report_formats: tuple[str, ...] | None,
+    supported_formats: tuple[str, ...],
+) -> dict[str, Path]:
+    default_formats = _default_report_formats(report_formats)
+    if str(report_path).strip().lower() == "auto":
+        return {fmt: output_path.parent / f"{output_path.stem}.report.{fmt}" for fmt in default_formats}
+
+    path = Path(report_path)
+    suffix = path.suffix.lower().lstrip(".")
+    if report_formats is None and suffix in supported_formats:
+        return {suffix: path}
+    if report_formats is not None and suffix in supported_formats:
+        return {fmt: path.with_suffix(f".{fmt}") for fmt in report_formats}
+    if suffix and suffix not in supported_formats and report_formats is None:
+        raise UnsupportedFormatError(
+            f"Unsupported conversion report format '{suffix}'. Supported formats: {', '.join(supported_formats)}."
+        )
+    output_dir = path
+    return {fmt: output_dir / f"{output_path.stem}.report.{fmt}" for fmt in default_formats}
+
+
+def _default_report_formats(report_formats: tuple[str, ...] | None) -> tuple[str, ...]:
+    formats = ["json", "pdf"]
+    for fmt in report_formats or ():
+        if fmt not in formats:
+            formats.append(fmt)
+    return tuple(formats)
+
+
+def _normalize_report_formats(
+    formats: tuple[str, ...] | list[str] | str | None,
+) -> tuple[str, ...] | None:
+    if formats is None:
+        return None
+    if isinstance(formats, str):
+        values = [item.strip() for item in formats.split(",")]
+    else:
+        values = [str(item).strip() for item in formats]
+    normalized = tuple(item.lower().lstrip(".") for item in values if item)
+    from .reporting import REPORT_FORMATS
+
+    unsupported = [item for item in normalized if item not in REPORT_FORMATS]
+    if unsupported:
+        raise UnsupportedFormatError(
+            f"Unsupported conversion report format(s): {unsupported}. "
+            f"Supported formats: {', '.join(REPORT_FORMATS)}."
+        )
+    return normalized or None
 
 
 def _load_metadata(metadata: dict[str, Any] | str | Path | None) -> dict[str, Any]:
@@ -642,6 +809,11 @@ def _batch_convert_one(
     keep_raw: bool,
     current_sign: str,
     repair_policy: str,
+    time_sampling_policy: str,
+    time_sampling_interval_s: float | None,
+    time_sampling_interpolation: str,
+    time_sampling_tolerance: float,
+    time_sampling_max_inserted_rows: int,
     detection_threshold: float,
     write_sidecars: bool,
     sheet: str | int | None,
@@ -709,6 +881,11 @@ def _batch_convert_one(
             keep_raw=keep_raw,
             current_sign=current_sign,
             repair_policy=repair_policy,
+            time_sampling_policy=time_sampling_policy,
+            time_sampling_interval_s=time_sampling_interval_s,
+            time_sampling_interpolation=time_sampling_interpolation,
+            time_sampling_tolerance=time_sampling_tolerance,
+            time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
             detection_threshold=detection_threshold,
             write_sidecars=write_sidecars,
             sheet=sheet_value,

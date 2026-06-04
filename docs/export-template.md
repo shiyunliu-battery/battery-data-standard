@@ -63,7 +63,7 @@ Supported targets are:
 | Target | Recommended format | Columns |
 | --- | --- | --- |
 | `bds` | CSV | Standard export columns. |
-| `bdf` | CSV | Legacy BDF-compatible export with slash-unit column names. |
+| `bdf` | CSV | Legacy BDF-style export with slash-unit column names; not a formal BDF conformance certificate. |
 | `duckdb` | Parquet | Standard export columns. |
 | `polars` | Parquet | Standard export columns. |
 | `battery-archive` | Parquet | Standard export columns. |
@@ -73,6 +73,9 @@ Supported targets are:
 | `pyprobe` | Parquet | `time_s`, `voltage_v`, `current_a`, plus optional cycle, step, and capacity columns. |
 
 Use `bds export-targets` or `bds.list_export_targets()` to inspect the registry.
+
+See [BDF compatibility status](bdf-compatibility.md) for the boundary between
+the current legacy BDF-style target and a future formal conformance report.
 
 ## Time Semantics
 

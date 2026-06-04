@@ -120,6 +120,46 @@ _BDF_EXPORT_RENAMES = {
     "internal_resistance_ohm": "Internal Resistance / ohm",
 }
 
+_INTEGRATION_EXPORT_RENAMES = {
+    "pybamm": {"test_time_s": "time_s", "current_a": "current_a"},
+    "pyprobe": {
+        "test_time_s": "time_s",
+        "voltage_v": "voltage_v",
+        "current_a": "current_a",
+        "cycle_index": "cycle_index",
+        "step_index": "step_index",
+        "step_time_s": "step_time_s",
+        "charge_capacity_ah": "charge_capacity_ah",
+        "discharge_capacity_ah": "discharge_capacity_ah",
+    },
+    "cellpy": {
+        "record_index": "data_point",
+        "test_time_s": "test_time",
+        "current_a": "current",
+        "voltage_v": "voltage",
+        "date_time": "datetime",
+        "step_time_s": "step_time",
+        "cycle_index": "cycle_index",
+        "step_index": "step_index",
+        "charge_capacity_ah": "charge_capacity",
+        "discharge_capacity_ah": "discharge_capacity",
+        "charge_energy_wh": "charge_energy",
+        "discharge_energy_wh": "discharge_energy",
+    },
+    "beep": {
+        "test_time_s": "test_time",
+        "current_a": "current",
+        "voltage_v": "voltage",
+        "cycle_index": "cycle_index",
+        "step_index": "step_index",
+        "step_time_s": "step_time",
+        "charge_capacity_ah": "charge_capacity",
+        "discharge_capacity_ah": "discharge_capacity",
+        "charge_energy_wh": "charge_energy",
+        "discharge_energy_wh": "discharge_energy",
+    },
+}
+
 
 def list_export_targets() -> list[dict[str, str]]:
     """Return available export targets for CLI/API discovery."""
@@ -151,6 +191,18 @@ def output_suffix_for_target(target: str | None) -> str:
         if spec.id == target_id:
             return spec.file_token
     return "bds"
+
+
+def export_label_for_canonical(column: str, *, target: str | None = "bds") -> str | None:
+    """Return the user-facing export label for a canonical BDS column."""
+    target_id = normalize_export_target(target)
+    if target_id == "bdf":
+        return _BDF_EXPORT_RENAMES.get(column, column)
+    if target_id in _STANDARD_TARGETS:
+        if column == "record_index":
+            return "Record Index"
+        return _DIRECT_RENAMES.get(column, _format_export_column_name(column))
+    return _INTEGRATION_EXPORT_RENAMES.get(target_id, {}).get(column)
 
 
 def to_export_frame(df: pl.DataFrame, *, target: str | None = "bds") -> pl.DataFrame:

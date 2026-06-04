@@ -5,10 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Package](https://img.shields.io/badge/package-bds-blue.svg)](https://pypi.org/project/battery-data-standard/)
 
-`battery-data-standard` is a Python library and command-line tool for converting
-battery cycler exports into a consistent tabular representation. It is
-intended for laboratories, battery test teams, and data pipelines that need a
-repeatable path from vendor files to analysis-ready CSV or Parquet outputs.
+`battery-data-standard` is a local Python library and command-line tool for
+turning battery cycler exports into validated, analysis-ready CSV or Parquet
+outputs with auditable conversion reports. It is intended for laboratories,
+battery test teams, and data pipelines that need a repeatable private path from
+vendor files to downstream tools such as DuckDB, Polars, PyBaMM, PyProBE,
+cellpy, BEEP, and Battery Archive-style workflows.
 
 The package is vendor-neutral and independent. It is not certified by any cycler
 vendor or standards body. Adapter support describes behavior implemented and
@@ -49,6 +51,8 @@ The package provides:
 - conversion of supported EIS tables to a standardized EIS table;
 - cycler detection, data-kind detection, validation, conversion reports, and
   batch manifests;
+- single-file diagnostics that explain detection, mapping, current-sign
+  evidence, repairs, validation, and recommended next actions;
 - intake audit reports with file-level conversion quality scores;
 - archive-aware batch conversion for directories, zip archives, and tar
   archives;
@@ -71,11 +75,23 @@ Detect a cycler export:
 bds detect raw_export.csv
 ```
 
+Explain how one file will be detected, mapped, validated, and exported:
+
+```bash
+bds explain raw_export.csv --text
+bds explain raw_export.csv --html report.html --xlsx report.xlsx --json report.json
+```
+
 Convert a time-series file:
 
 ```bash
-bds convert raw_export.csv normalized.bds.csv --cycler auto --report report.json
+bds convert raw_export.csv normalized.bds.csv --cycler auto --report auto
 ```
+
+`--report auto` writes `normalized.bds.report.json` and
+`normalized.bds.report.pdf` next to the converted CSV. Add
+`--report-format html` or `--report-format xlsx` when those review formats are
+needed.
 
 Export directly to a downstream staging format:
 
@@ -103,10 +119,12 @@ Audit a raw folder before committing to conversion:
 bds audit raw_exports --recursive --json audit.json --html audit.html
 ```
 
-The audit report scores each file and highlights conversion failures, missing
-required fields, unit conversions, time-axis repairs, current-sign evidence,
-duplicate timestamps, non-monotonic time, suspicious flat voltage/current, and
-cycle/step anomalies.
+The audit report scores each raw data file and highlights conversion failures,
+missing required fields, unit conversions, time-axis repairs, current-sign
+evidence, duplicate timestamps, non-monotonic time, suspicious flat
+voltage/current, and cycle/step anomalies. Optional-column coverage is reported
+separately so small but valid fixtures are not treated as low-quality data just
+because they omit fields such as temperature or energy.
 
 Inspect runtime adapter metadata and the pinned schema:
 
@@ -128,17 +146,17 @@ df = bds.read("raw_export.csv", cycler="auto")
 Show the user-facing export column names defined in the export template:
 
 ```python
-from battery_data_standard.export import to_export_frame
+import bds
 
-export_df = to_export_frame(df)
+export_df = bds.to_export_frame(df)
 print(export_df.columns)
 ```
 
 ### Preserve Raw Current Sign And Repair Time Axis
 
 For real experimental datasets, it is often useful to preserve the current sign
-exactly as recorded by the source file and allow repairable time-axis issues to
-be normalized:
+exactly as recorded by the source file, allow documented time-axis repairs, and
+record any regular-sampling gaps:
 
 ```python
 df = bds.read(
@@ -146,6 +164,7 @@ df = bds.read(
     cycler="auto",
     current_sign="preserve",
     repair_policy="repair",
+    time_sampling_policy="repair",
 )
 ```
 
@@ -154,6 +173,13 @@ charge/discharge sign convention from the instrument. Use
 `repair_policy="repair"` when the pipeline accepts documented normalizations
 such as shifting elapsed test time to start at zero or sorting non-monotonic time
 values.
+
+When a fixed sampling interval is detected, BDS checks for missing time points.
+By default, missing points on that regular grid are interpolated with
+`time_sampling_interpolation="linear"` and recorded in the conversion report.
+Use `time_sampling_policy="warn"` to report gaps without inserting rows, or set
+`time_sampling_interval_s=1`, `2`, `10`, or another known interval when the
+sampling cadence is defined by the test protocol.
 
 Use an explicit cycler when the source format is known:
 
@@ -168,9 +194,12 @@ report = bds.convert(
     "raw_export.csv",
     "normalized.bds.csv",
     cycler="auto",
-    report_path="report.json",
+    report_path="auto",
 )
 ```
+
+This writes the converted CSV plus JSON and PDF reports. HTML and Excel reports
+can be added with `report_formats=("html", "xlsx")`.
 
 Write a downstream staging table by selecting an export target:
 
@@ -278,9 +307,10 @@ explicitly.
 
 ## Validation and Reports
 
-Every conversion returns or writes a machine-readable report with schema version,
-row count, columns, validation status, warnings, provenance, adapter metadata,
-and repair operations.
+Every conversion returns a machine-readable report with schema version, row
+count, columns, validation status, warnings, provenance, adapter metadata, repair
+operations, and time-sampling findings. With `report_path="auto"`, BDS writes
+JSON and PDF reports by default; HTML and Excel reports are optional formats.
 
 Strict validation is enabled by default. Repairable issues are reported with the
 default `repair_policy="warn"`. Use `repair_policy="repair"` or
@@ -296,6 +326,11 @@ Public documentation is in the `docs` directory:
 - [Export template](docs/export-template.md)
 - [Export targets](docs/export-template.md#export-targets)
 - [Schema compatibility](docs/schema-compatibility.md)
+- [Diagnostics and audit reports](docs/diagnostics.md)
+- [Current sign convention](docs/current-sign.md)
+- [Step and cycle semantics](docs/step-cycle-semantics.md)
+- [BDF compatibility status](docs/bdf-compatibility.md)
+- [Warning and issue codes](docs/warning-codes.md)
 - [Ecosystem integrations](docs/integrations.md)
 
 ## License and Attribution

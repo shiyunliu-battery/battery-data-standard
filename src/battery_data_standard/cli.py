@@ -21,6 +21,7 @@ from .api import (
     validate_file,
 )
 from .audit import audit
+from .diagnostics import explain
 from .exceptions import (
     BatteryDataStandardError,
     DetectionError,
@@ -30,7 +31,9 @@ from .exceptions import (
     ValidationFailed,
 )
 from .export import EXPORT_TARGET_IDS
+from .reporting import write_explain_report
 from .schema import BDS_SCHEMA_VERSION, schema_dict
+from .time_sampling import TIME_SAMPLING_INTERPOLATION_METHODS, TIME_SAMPLING_POLICIES
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -57,6 +60,37 @@ def main(argv: list[str] | None = None) -> int:
     detect_kind_parser.add_argument("file")
     detect_kind_parser.add_argument("--sheet")
 
+    explain_parser = subparsers.add_parser(
+        "explain", help="Explain detection, mapping, validation, and export"
+    )
+    explain_parser.add_argument("file")
+    explain_parser.add_argument("--cycler", default="auto")
+    explain_parser.add_argument("--detect-threshold", type=float, default=0.1)
+    explain_parser.add_argument("--profile")
+    explain_parser.add_argument("--sheet")
+    explain_parser.add_argument(
+        "--target",
+        choices=EXPORT_TARGET_IDS,
+        default="bds",
+        help="Export target preset used when showing output columns.",
+    )
+    explain_parser.add_argument(
+        "--current-sign",
+        choices=("preserve", "discharge-positive", "charge-positive"),
+        default="charge-positive",
+    )
+    explain_parser.add_argument(
+        "--repair-policy",
+        choices=("none", "warn", "repair"),
+        default="warn",
+        help="How to handle repairable table issues during the diagnostic conversion.",
+    )
+    explain_parser.add_argument("--text", action="store_true", help="Print a compact text diagnostic.")
+    explain_parser.add_argument("--json", help="Write the diagnostic report as JSON.")
+    explain_parser.add_argument("--html", help="Write a polished user-facing HTML report.")
+    explain_parser.add_argument("--xlsx", help="Write a polished user-facing Excel workbook report.")
+    explain_parser.add_argument("--pdf", help="Write a polished user-facing PDF report.")
+
     convert_parser = subparsers.add_parser("convert", help="Convert raw cycler data to normalized data")
     convert_parser.add_argument("input")
     convert_parser.add_argument("output")
@@ -72,6 +106,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Export target preset. Default keeps the standard BDS table.",
     )
     convert_parser.add_argument("--report")
+    convert_parser.add_argument(
+        "--report-format",
+        action="append",
+        choices=("json", "html", "xlsx", "pdf"),
+        help="Report format to write when --report is auto or a report base path. Repeat for multiple formats.",
+    )
     convert_parser.add_argument("--metadata")
     convert_parser.add_argument("--keep-raw", action="store_true")
     convert_parser.add_argument(
@@ -86,6 +126,29 @@ def main(argv: list[str] | None = None) -> int:
         choices=("none", "warn", "repair"),
         default="warn",
         help="How to handle repairable table issues before validation.",
+    )
+    convert_parser.add_argument(
+        "--time-sampling-policy",
+        choices=TIME_SAMPLING_POLICIES,
+        default="repair",
+        help="How to handle missing samples on a regular test_time_s grid.",
+    )
+    convert_parser.add_argument(
+        "--time-sampling-interval",
+        type=float,
+        help="Expected sampling interval in seconds. If omitted, BDS infers a regular interval when possible.",
+    )
+    convert_parser.add_argument(
+        "--time-sampling-interpolation",
+        choices=TIME_SAMPLING_INTERPOLATION_METHODS,
+        default="linear",
+        help="Interpolation method used when --time-sampling-policy repair inserts missing samples.",
+    )
+    convert_parser.add_argument(
+        "--time-sampling-tolerance",
+        type=float,
+        default=0.1,
+        help="Relative tolerance for detecting integer-multiple sampling gaps.",
     )
 
     convert_eis_parser = subparsers.add_parser(
@@ -144,6 +207,29 @@ def main(argv: list[str] | None = None) -> int:
         default="warn",
         help="How to handle repairable table issues before validation.",
     )
+    batch_parser.add_argument(
+        "--time-sampling-policy",
+        choices=TIME_SAMPLING_POLICIES,
+        default="repair",
+        help="How to handle missing samples on a regular test_time_s grid.",
+    )
+    batch_parser.add_argument(
+        "--time-sampling-interval",
+        type=float,
+        help="Expected sampling interval in seconds. If omitted, BDS infers a regular interval when possible.",
+    )
+    batch_parser.add_argument(
+        "--time-sampling-interpolation",
+        choices=TIME_SAMPLING_INTERPOLATION_METHODS,
+        default="linear",
+        help="Interpolation method used when --time-sampling-policy repair inserts missing samples.",
+    )
+    batch_parser.add_argument(
+        "--time-sampling-tolerance",
+        type=float,
+        default=0.1,
+        help="Relative tolerance for detecting integer-multiple sampling gaps.",
+    )
 
     audit_parser = subparsers.add_parser("audit", help="Audit raw cycler files without writing conversions")
     audit_parser.add_argument("input")
@@ -178,6 +264,21 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(detect(args.file).to_dict(), indent=2))
         elif args.command == "detect-kind":
             print(json.dumps(detect_kind(args.file, sheet=args.sheet).to_dict(), indent=2))
+        elif args.command == "explain":
+            explain_report = explain(
+                args.file,
+                cycler=args.cycler,
+                profile=args.profile,
+                current_sign=args.current_sign,
+                repair_policy=args.repair_policy,
+                detection_threshold=args.detect_threshold,
+                sheet=args.sheet,
+                target=args.target,
+            )
+            for report_path in (args.json, args.html, args.xlsx, args.pdf):
+                if report_path:
+                    write_explain_report(explain_report, report_path)
+            print(explain_report.to_text() if args.text else explain_report.to_json())
         elif args.command == "convert":
             report = convert(
                 args.input,
@@ -190,8 +291,13 @@ def main(argv: list[str] | None = None) -> int:
                 keep_raw=args.keep_raw,
                 current_sign=args.current_sign,
                 repair_policy=args.repair_policy,
+                time_sampling_policy=args.time_sampling_policy,
+                time_sampling_interval_s=args.time_sampling_interval,
+                time_sampling_interpolation=args.time_sampling_interpolation,
+                time_sampling_tolerance=args.time_sampling_tolerance,
                 detection_threshold=args.detect_threshold,
                 report_path=args.report,
+                report_formats=args.report_format,
                 write_sidecars=args.sidecars,
                 sheet=args.sheet,
                 target=args.target,
@@ -225,6 +331,10 @@ def main(argv: list[str] | None = None) -> int:
                 keep_raw=args.keep_raw,
                 current_sign=args.current_sign,
                 repair_policy=args.repair_policy,
+                time_sampling_policy=args.time_sampling_policy,
+                time_sampling_interval_s=args.time_sampling_interval,
+                time_sampling_interpolation=args.time_sampling_interpolation,
+                time_sampling_tolerance=args.time_sampling_tolerance,
                 detection_threshold=args.detect_threshold,
                 write_sidecars=args.sidecars,
                 sheet=args.sheet,

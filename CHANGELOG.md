@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- No unreleased changes yet.
+
+## 0.2.1 - 2026-06-04
+
+- Added `bds explain` diagnostics and report writers for JSON, HTML, Excel, and
+  PDF outputs.
+- Added `report_path="auto"` and regular time-sampling gap diagnostics for
+  conversion reports.
+- Added public API exports for export frames, file validation, and report-writing
+  helpers.
+- Improved audit filtering, optional-column scoring, data-kind detection aliases,
+  and current-sign evidence reuse.
+
 ## 0.2.0 - 2026-06-01
 
 - Added export targets for DuckDB, Polars, cellpy, BEEP, PyBaMM, PyProBE, and Battery Archive workflows.

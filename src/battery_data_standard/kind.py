@@ -10,6 +10,7 @@ from typing import Any
 from .eis import looks_like_eis_columns
 from .exceptions import BatteryDataStandardError
 from .io import read_table_with_metadata, sample_text, xlsx_sheet_names
+from .schema import CANONICAL_COLUMNS, canonical_label_for
 
 
 @dataclass
@@ -149,21 +150,40 @@ def detect_kind(path: str | Path, *, sheet: str | int | None = None) -> DataKind
 
 
 def _looks_like_timeseries(columns: list[str]) -> bool:
+    labels = _canonical_labels(columns)
     slugs = {_slug(column) for column in columns}
-    has_time = any(
+    has_time = bool({"test_time_s", "date_time", "unix_time_s"} & labels) or any(
         token in slug
         for slug in slugs
         for token in ("time", "timestamp", "datetime", "testtim", "testtime", "runtime")
     )
-    has_voltage = any(
+    has_voltage = "voltage_v" in labels or any(
         token in slug
         for slug in slugs
-        for token in ("voltage", "volt", "ewe", "ecell", "ubattery", "v5", "uv")
+        for token in ("voltage", "volt", "potential", "ewe", "ecell", "ubattery", "v5", "uv")
     )
-    has_current = any(
+    has_current = "current_a" in labels or any(
         token in slug for slug in slugs for token in ("current", "curr", "ampere", "ibattery", "ia", "cur")
     )
     return has_time and has_voltage and has_current
+
+
+def _canonical_labels(columns: list[str]) -> set[str]:
+    labels: set[str] = set()
+    for column in columns:
+        label = canonical_label_for(column) or _canonical_label_from_slug(column)
+        if label is not None:
+            labels.add(label)
+    return labels
+
+
+def _canonical_label_from_slug(column: str) -> str | None:
+    column_slug = _slug(column)
+    for spec in CANONICAL_COLUMNS:
+        for alias in (spec.label, spec.machine_name, *spec.aliases):
+            if column_slug == _slug(alias):
+                return spec.label
+    return None
 
 
 def _looks_like_unsupported_table(columns: list[str]) -> bool:

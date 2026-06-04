@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import zipfile
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -207,6 +209,86 @@ def test_convert_pyprobe_target_writes_diagnostic_staging_table(tmp_path):
     assert report.metadata["export_target"] == "pyprobe"
 
 
+def test_convert_report_path_auto_writes_json_and_pdf_by_default(tmp_path):
+    raw = tmp_path / "raw.csv"
+    raw.write_text("Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n1,3.5,0.2\n", encoding="utf-8")
+    output = tmp_path / "normalized.bds.csv"
+
+    report = bds.convert(raw, output, cycler="generic", report_path="auto")
+
+    json_path = tmp_path / "normalized.bds.report.json"
+    pdf_path = tmp_path / "normalized.bds.report.pdf"
+    assert output.exists()
+    assert json_path.exists()
+    assert pdf_path.exists()
+    assert not (tmp_path / "normalized.bds.report.html").exists()
+    assert not (tmp_path / "normalized.bds.report.xlsx").exists()
+    saved = json.loads(json_path.read_text(encoding="utf-8"))
+    assert saved["metadata"]["report_outputs"]["json"] == str(json_path)
+    assert saved["metadata"]["report_outputs"]["pdf"] == str(pdf_path)
+    assert report.metadata["report_outputs"]["pdf"] == str(pdf_path)
+
+
+def test_convert_report_formats_can_write_blue_html_and_xlsx(tmp_path):
+    from openpyxl import load_workbook
+
+    raw = tmp_path / "raw.csv"
+    raw.write_text("Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n1,3.5,0.2\n", encoding="utf-8")
+    output = tmp_path / "normalized.bds.csv"
+
+    bds.convert(raw, output, cycler="generic", report_path="auto", report_formats=("json", "html", "xlsx"))
+
+    html_path = tmp_path / "normalized.bds.report.html"
+    xlsx_path = tmp_path / "normalized.bds.report.xlsx"
+    pdf_path = tmp_path / "normalized.bds.report.pdf"
+    html_text = html_path.read_text(encoding="utf-8")
+    workbook = load_workbook(xlsx_path)
+    assert "BDS Conversion Report" in html_text
+    assert "language result" not in html_text
+    assert "#1F4E79" in html_text
+    assert workbook["Summary"]["A1"].value == "BDS Conversion Report"
+    assert workbook["Summary"]["A1"].fill.fgColor.rgb == "001F4E79"
+    assert pdf_path.exists()
+
+
+def test_convert_repairs_regular_time_sampling_gaps_by_default(tmp_path):
+    raw = tmp_path / "gap.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A)\n0,3.0,0.0\n1,3.1,1.0\n2,3.2,2.0\n4,3.4,4.0\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "gap.bds.csv"
+
+    report = bds.convert(raw, output, cycler="generic", report_path="auto")
+    exported = pl.read_csv(output)
+
+    assert exported["Test Time (s)"].to_list() == [0.0, 1.0, 2.0, 3.0, 4.0]
+    assert exported["Voltage (V)"].to_list()[3] == pytest.approx(3.3)
+    assert exported["Current (A)"].to_list()[3] == pytest.approx(3.0)
+    assert report.metadata["time_sampling"]["status"] == "repaired"
+    assert report.metadata["time_sampling"]["missing_points"] == 1
+    assert any(issue.code == "missing-sample-timepoints" for issue in report.validation.issues)
+    saved = json.loads((tmp_path / "gap.bds.report.json").read_text(encoding="utf-8"))
+    assert saved["metadata"]["time_sampling"]["gaps"][0]["missing_times_s"] == [3.0]
+
+
+def test_convert_time_sampling_warn_policy_reports_without_inserting(tmp_path):
+    raw = tmp_path / "gap.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A)\n0,3.0,0.0\n1,3.1,1.0\n2,3.2,2.0\n4,3.4,4.0\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "gap.bds.csv"
+
+    report = bds.convert(raw, output, cycler="generic", time_sampling_policy="warn")
+    exported = pl.read_csv(output)
+
+    assert exported["Test Time (s)"].to_list() == [0.0, 1.0, 2.0, 4.0]
+    assert report.metadata["time_sampling"]["status"] == "gaps-detected"
+    assert report.metadata["time_sampling"]["missing_points"] == 1
+    assert any("missing sample" in warning for warning in report.warnings)
+
+
 def test_batch_convert_target_uses_target_suffix(tmp_path):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -333,14 +415,178 @@ def test_audit_scores_converted_unsupported_and_suspicious_files(tmp_path):
 
     report = audit(input_dir, cycler="generic", current_sign="preserve")
 
-    assert report.files == 3
+    assert report.files == 2
     assert report.converted == 2
-    assert report.unsupported == 1
+    assert report.unsupported == 0
     suspicious = next(record for record in report.records if record.relative_path == "suspicious.csv")
     assert suspicious.checks["duplicated_timestamps"] == 1
     assert suspicious.checks["suspicious_flat_voltage"]["flag"] is True
     assert any(issue.code == "duplicated-timestamps" for issue in suspicious.issues)
     assert suspicious.quality_score < 100
+
+
+def test_audit_skips_fixture_manifests_and_keeps_optional_completeness_separate():
+    fixture_root = Path(__file__).parent / "fixtures"
+
+    report = audit(fixture_root, recursive=True)
+
+    assert report.files >= 1
+    assert all(not record.relative_path.endswith("manifest.jsonl") for record in report.records)
+    assert "missing-optional-column" not in report.top_issue_codes
+    arbin = next(
+        record for record in report.records if record.relative_path.replace("\\", "/") == "arbin/basic.csv"
+    )
+    assert arbin.quality_score >= 90
+    assert arbin.quality_grade == "A"
+    assert arbin.completeness["required_missing"] == []
+    assert "unix_time_s" in arbin.completeness["optional_missing"]
+
+
+def test_explain_successful_file_reports_mapping_and_next_action():
+    source = Path(__file__).parent / "fixtures" / "neware" / "flat.csv"
+
+    report = bds.explain(source)
+    payload = report.to_dict()
+
+    assert payload["status"] == "ok"
+    assert payload["data_kind"]["kind"] == "timeseries"
+    assert payload["selected_adapter"] == "neware"
+    assert any(item["source"] == "Current(mA)" for item in payload["unit_transforms"])
+    assert any(item["canonical_column"] == "test_time_s" for item in payload["column_mapping"])
+    assert "bds convert" in payload["recommended_next_action"]
+
+
+def test_explain_report_writes_polished_html_json_and_xlsx(tmp_path):
+    from openpyxl import load_workbook
+
+    raw = tmp_path / "raw.csv"
+    raw.write_text("Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n", encoding="utf-8")
+
+    report = bds.explain(raw, cycler="generic")
+    outputs = bds.write_explain_reports(report, tmp_path, formats=("json", "html", "xlsx"))
+
+    saved = json.loads(Path(outputs["json"]).read_text(encoding="utf-8"))
+    html_text = Path(outputs["html"]).read_text(encoding="utf-8")
+    workbook = load_workbook(outputs["xlsx"])
+
+    assert saved["status"] == "ok"
+    assert "Report" in html_text
+    assert "The source file was identified as" in html_text
+    assert "Column Mapping" in html_text
+    assert {"Summary", "Column Mapping", "Validation Issues"}.issubset(workbook.sheetnames)
+    assert workbook["Summary"]["A1"].value == "BDS Diagnostic Report"
+    assert workbook["Column Mapping"]["A1"].value == "Source Column"
+
+
+def test_explain_failed_file_returns_diagnostic_payload(tmp_path):
+    raw = tmp_path / "bad.csv"
+    raw.write_text("not,enough\n1,2\n", encoding="utf-8")
+
+    report = bds.explain(raw)
+    payload = report.to_dict()
+
+    assert payload["status"] in {"converted-with-issues", "error"}
+    assert payload["recommended_next_action"]
+    if payload["validation"] is not None:
+        assert payload["validation"]["valid"] is False
+
+
+def test_explain_eis_and_unsupported_files(tmp_path):
+    eis = tmp_path / "eis.csv"
+    eis.write_text("Frequency_Hz,Zreal_Ohm,Zimag_Ohm\n100,0.1,-0.02\n", encoding="utf-8")
+    readme = tmp_path / "README.txt"
+    readme.write_text("notes only\n", encoding="utf-8")
+
+    eis_report = bds.explain(eis).to_dict()
+    unsupported_report = bds.explain(readme).to_dict()
+
+    assert eis_report["status"] == "eis"
+    assert eis_report["data_kind"]["kind"] == "eis"
+    assert eis_report["validation"]["valid"] is True
+    assert unsupported_report["status"] == "unsupported"
+    assert unsupported_report["data_kind"]["kind"] == "unsupported"
+
+
+def test_cli_explain_json_and_text(tmp_path):
+    raw = tmp_path / "raw.csv"
+    raw.write_text("Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n", encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
+
+    json_run = subprocess.run(
+        [sys.executable, "-m", "battery_data_standard.cli", "explain", str(raw), "--cycler", "generic"],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+    text_run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "battery_data_standard.cli",
+            "explain",
+            str(raw),
+            "--cycler",
+            "generic",
+            "--text",
+        ],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+
+    assert json.loads(json_run.stdout)["status"] == "ok"
+    assert "BDS explain" in text_run.stdout
+
+
+def test_cli_explain_writes_user_facing_reports(tmp_path):
+    raw = tmp_path / "raw.csv"
+    raw.write_text("Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n", encoding="utf-8")
+    html_path = tmp_path / "explain.html"
+    json_path = tmp_path / "explain.json"
+    xlsx_path = tmp_path / "explain.xlsx"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
+
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "battery_data_standard.cli",
+            "explain",
+            str(raw),
+            "--cycler",
+            "generic",
+            "--json",
+            str(json_path),
+            "--html",
+            str(html_path),
+            "--xlsx",
+            str(xlsx_path),
+        ],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+
+    assert json.loads(run.stdout)["status"] == "ok"
+    assert json.loads(json_path.read_text(encoding="utf-8"))["status"] == "ok"
+    assert "BDS Diagnostic Report" in html_path.read_text(encoding="utf-8")
+    assert xlsx_path.exists()
+
+
+def test_detect_kind_uses_schema_aliases_for_common_vendor_headers(tmp_path):
+    basytec = tmp_path / "basytec.txt"
+    biologic = tmp_path / "bio.mpt"
+    novonix = tmp_path / "novonix.csv"
+    basytec.write_text("~Time[h]\tU[V]\tI[A]\n0\t3.4\t0.1\n", encoding="utf-8")
+    biologic.write_text("time/s\tEwe/V\tI/mA\n0\t3.4\t100\n", encoding="utf-8")
+    novonix.write_text("Run Time (h),Potential (V),Current (A)\n0,3.4,0.1\n", encoding="utf-8")
+
+    assert bds.detect_kind(basytec).kind == "timeseries"
+    assert bds.detect_kind(biologic).kind == "timeseries"
+    assert bds.detect_kind(novonix).kind == "timeseries"
 
 
 def test_cli_audit_writes_json_and_html(tmp_path):

@@ -777,14 +777,14 @@ def test_cli_detect_and_validate(tmp_path):
 
 
 def test_public_version_and_module_cli():
-    assert __version__ == "0.2.0"
+    assert __version__ == "0.2.1"
     run = subprocess.run(
         [sys.executable, "-m", "battery_data_standard", "--version"],
         text=True,
         capture_output=True,
         check=True,
     )
-    assert "0.2.0" in run.stdout
+    assert "0.2.1" in run.stdout
 
 
 def test_short_import_alias_matches_public_api():

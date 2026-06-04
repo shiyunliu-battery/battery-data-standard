@@ -1,0 +1,48 @@
+name: Cycler import failure
+description: Report a raw cycler file that does not detect, convert, or validate correctly.
+title: "[import] "
+labels: ["import", "needs-fixture"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What did you expect BDS to do, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: BDS version
+      placeholder: "bds --version"
+    validations:
+      required: true
+  - type: input
+    id: cycler
+    attributes:
+      label: Cycler and software/export version
+      placeholder: "Arbin DataPro, NEWARE BTS, BioLogic EC-Lab, etc."
+  - type: textarea
+    id: explain
+    attributes:
+      label: bds explain output
+      description: Run `bds explain <file> --text` and paste the output.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: columns
+    attributes:
+      label: Source columns
+      description: Paste the header row or describe the expected time, voltage, current, cycle, and step columns.
+      render: text
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Reduced fixture
+      description: Attach a reduced/anonymized file if possible, and state whether it may be added to public regression tests.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include current sign convention, export settings, sheet names, delimiter, and any confidentiality constraints.

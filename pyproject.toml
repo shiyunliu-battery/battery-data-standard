@@ -30,7 +30,8 @@ dependencies = [
   "polars>=0.20",
   "pandas>=2.0",
   "openpyxl>=3.1",
-  "xlrd>=2.0"
+  "xlrd>=2.0",
+  "reportlab>=4.0"
 ]
 
 [project.urls]
@@ -43,8 +44,9 @@ Documentation = "https://github.com/shiyunliu-battery/battery-data-standard#read
 yaml = ["PyYAML>=6.0"]
 matlab = ["scipy>=1.10", "h5py>=3.8"]
 mpr = ["galvani>=0.5"]
+report = ["reportlab>=4.0"]
 test = ["pytest>=8.0", "pytest-cov>=5.0", "PyYAML>=6.0", "scipy>=1.10", "h5py>=3.8"]
-dev = ["build>=1.2", "twine>=5.0", "pytest>=8.0", "pytest-cov>=5.0", "PyYAML>=6.0", "scipy>=1.10", "h5py>=3.8", "galvani>=0.5", "ruff>=0.8", "mypy>=1.0", "pip-audit>=2.7"]
+dev = ["build>=1.2", "twine>=5.0", "pytest>=8.0", "pytest-cov>=5.0", "PyYAML>=6.0", "scipy>=1.10", "h5py>=3.8", "galvani>=0.5", "reportlab>=4.0", "ruff>=0.8", "mypy>=1.0", "pip-audit>=2.7"]
 
 [project.scripts]
 bds = "battery_data_standard.cli:main"

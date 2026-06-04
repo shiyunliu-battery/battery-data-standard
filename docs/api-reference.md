@@ -25,6 +25,10 @@ read(
     keep_raw=False,
     current_sign="charge-positive",
     repair_policy="warn",
+    time_sampling_policy="repair",
+    time_sampling_interval_s=None,
+    time_sampling_interpolation="linear",
+    time_sampling_tolerance=0.1,
     detection_threshold=0.1,
     sheet=None,
 )
@@ -62,6 +66,12 @@ df = bds.read(
 `repair_policy="repair"` applies documented repairs such as shifting elapsed
 test time to start at zero.
 
+`time_sampling_policy="repair"` checks regular `test_time_s` sampling and
+inserts missing samples only when a fixed interval is detected or supplied. Use
+`time_sampling_policy="warn"` to report missing time points without insertion,
+or set `time_sampling_interval_s=1`, `2`, `10`, or another protocol interval.
+The default interpolation method is `time_sampling_interpolation="linear"`.
+
 ### `read_with_report`
 
 ```python
@@ -86,8 +96,13 @@ convert(
     keep_raw=False,
     current_sign="charge-positive",
     repair_policy="warn",
+    time_sampling_policy="repair",
+    time_sampling_interval_s=None,
+    time_sampling_interpolation="linear",
+    time_sampling_tolerance=0.1,
     detection_threshold=0.1,
     report_path=None,
+    report_formats=None,
     write_sidecars=False,
     sheet=None,
     target="bds",
@@ -97,9 +112,16 @@ convert(
 Converts a supported time-series export and writes CSV or Parquet output. The
 function returns `ConversionReport`.
 
-`format` must be `csv` or `parquet`. If `report_path` is provided, the conversion
-report is written as JSON. If `write_sidecars=True`, report and metadata
-sidecars are written next to the output.
+`format` must be `csv` or `parquet`. Use `report_path="auto"` for the standard
+user workflow: the converted data file is written together with JSON and PDF
+reports named from the output stem, for example
+`normalized.bds.report.json` and `normalized.bds.report.pdf`.
+
+Use `report_formats=("html", "xlsx")` with `report_path="auto"` to add review
+formats while keeping the default JSON and PDF reports. Passing a single report
+filename writes the format implied by the suffix, such as `report.json`,
+`report.html`, `report.xlsx`, or `report.pdf`. If `write_sidecars=True`, report
+and metadata sidecars are written next to the output.
 
 `target` selects the output schema preset. The default `bds` target writes the
 standard normalized table. Other targets write staging tables for downstream
@@ -108,7 +130,7 @@ tools:
 | Target | Output shape |
 | --- | --- |
 | `bds` | Standard BDS export columns such as `Test Time (s)`, `Voltage (V)`, and `Current (A)`. |
-| `bdf` | Legacy BDF-compatible export with slash-unit column names. |
+| `bdf` | Legacy BDF-style export with slash-unit column names; not a formal conformance certificate. |
 | `duckdb` | Same standard table, recommended with Parquet. |
 | `polars` | Same standard table, recommended with Parquet. |
 | `battery-archive` | Same standard table for archive-style packaging, recommended with Parquet. |
@@ -169,6 +191,10 @@ batch_convert(
     keep_raw=False,
     current_sign="charge-positive",
     repair_policy="warn",
+    time_sampling_policy="repair",
+    time_sampling_interval_s=None,
+    time_sampling_interpolation="linear",
+    time_sampling_tolerance=0.1,
     detection_threshold=0.1,
     write_sidecars=False,
     sheet=None,
@@ -195,6 +221,38 @@ Archives are expanded into temporary storage. Supported archive suffixes are
 
 ## Intake Audit
 
+### `explain`
+
+```python
+report = bds.explain(
+    "raw_export.csv",
+    cycler="auto",
+    current_sign="preserve",
+    repair_policy="warn",
+)
+```
+
+Returns `ExplainReport` for one file without writing converted data. The report
+includes data-kind detection, adapter candidates, selected adapter, confidence,
+sheet, source columns, canonical/export column mapping, unit transforms,
+current-sign evidence, repair policy, validation issues, warnings, unmapped
+columns, and a recommended next action.
+
+The equivalent CLI is:
+
+```bash
+bds explain raw_export.csv --text
+bds explain raw_export.csv --json report.json --html report.html --xlsx report.xlsx
+```
+
+Python callers can write the same formatted diagnostic reports:
+
+```python
+bds.write_explain_reports(report, "reports", formats=("json", "html", "xlsx"))
+```
+
+PDF output is also supported.
+
 ### `audit`
 
 ```python
@@ -213,6 +271,11 @@ file-level status, data kind, cycler, detection confidence, quality score,
 quality grade, missing required columns, unit conversions, repair operations,
 current-sign evidence, duplicate timestamps, non-monotonic time, suspicious flat
 voltage/current checks, cycle/step anomaly checks, and errors.
+
+Directory audit skips obvious helper files such as README files, manifests,
+metadata/report sidecars, labels, summaries, and procedure files. Optional
+columns are reported under `completeness`; missing optional columns are not
+quality-score penalties.
 
 The equivalent CLI is:
 
@@ -313,6 +376,11 @@ is available from `battery_data_standard.api`.
 - `repair_operations` and `unmapped_columns`;
 - `current_sign`.
 
+Time-sampling findings are stored in `metadata["time_sampling"]` when the
+time-series path is used. The record includes policy, expected interval,
+interval confidence, missing sample count, gap locations, interpolation method,
+and inserted row count when repair is applied.
+
 ### `ValidationReport`
 
 `ValidationReport` includes:
@@ -336,6 +404,23 @@ than parsing free-text messages.
 - `reason`;
 - `candidates`;
 - `path`.
+
+### `ExplainReport`
+
+`ExplainReport` includes:
+
+- `status`;
+- `data_kind`;
+- `detection`;
+- `selected_adapter` and `confidence`;
+- `sheet`;
+- `source_columns`, `canonical_columns`, and `export_columns`;
+- `column_mapping` and `unit_transforms`;
+- `current_sign` and `current_sign_evidence`;
+- `repair_policy`;
+- `validation`, `warnings`, `unmapped_columns`, and `time_sampling`;
+- `recommended_next_action`;
+- `error_type` and `error` when diagnostics cannot complete conversion.
 
 ## Batch Records
 

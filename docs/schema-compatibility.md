@@ -12,6 +12,10 @@ The current schema identifier is also included in every `ConversionReport`.
 `BDF_SCHEMA_VERSION` remains available as a legacy compatibility constant for
 older integrations.
 
+The `target=bdf` export is a legacy BDF-style column preset. It is useful for
+interoperability experiments, but it is not a formal BDF conformance report. See
+[BDF compatibility status](bdf-compatibility.md).
+
 ## Compatibility Policy
 
 During the pre-1.0 beta period:
