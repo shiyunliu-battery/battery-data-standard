@@ -597,6 +597,8 @@ def _source_unit(source: str) -> str | None:
         .replace("�C", "degC")
         .replace("℃", "degC")
         .replace("癈", "degC")
+        .replace("Ąć", "degC")
+        .replace("¡æ", "degC")
         .replace("μ", "µ")
         .replace("A.h", "Ah")
         .replace("W.h", "Wh")

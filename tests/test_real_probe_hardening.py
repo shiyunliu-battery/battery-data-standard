@@ -328,6 +328,47 @@ def test_arbin_xlsx_prefers_channel_sheet_over_rawdata_sheet(tmp_path):
     assert validate(df).valid
 
 
+def test_arbin_aux_temperature_mojibake_column_is_exported(tmp_path):
+    from openpyxl import Workbook
+
+    pd = pytest.importorskip("pandas")
+
+    raw = tmp_path / "arbin_aux_temperature.xlsx"
+    workbook = Workbook()
+    info = workbook.active
+    info.title = "Global_Info"
+    info.append(["TEST REPORT"])
+    channel = workbook.create_sheet("Channel_4_1")
+    channel.append(
+        [
+            "Date_Time",
+            "Test_Time(s)",
+            "Step_Time(s)",
+            "Step_Index",
+            "Cycle_Index",
+            "Voltage(V)",
+            "Current(A)",
+            "Aux_Temperature(Ąć)_1",
+        ]
+    )
+    channel.append(["2026-01-01 00:00:00", 0.0, 0.0, 1, 1, 3.5, 0.1, 24.5])
+    channel.append(["2026-01-01 00:00:01", 1.0, 1.0, 1, 1, 3.6, 0.2, 24.7])
+    workbook.save(raw)
+
+    df = bds.read(raw, cycler="arbin", sheet="Channel_4_1")
+
+    assert df["ambient_temperature_deg_c"].to_list() == [24.5, 24.7]
+    assert validate(df).valid
+
+    out = tmp_path / "arbin_aux_temperature.bds.csv"
+    report = bds.convert(raw, out, cycler="arbin", sheet="Channel_4_1")
+    exported = pd.read_csv(out)
+
+    assert "Ambient Temperature (degC)" in exported.columns
+    assert exported["Ambient Temperature (degC)"].to_list() == [24.5, 24.7]
+    assert "Aux_Temperature(Ąć)_1" not in report.metadata["unmapped_columns"]
+
+
 def test_arbin_acim_eis_sheet_with_magnitude_phase_converts(tmp_path):
     from openpyxl import Workbook
 

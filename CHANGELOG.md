@@ -4,6 +4,11 @@
 
 - No unreleased changes yet.
 
+## 0.2.2 - 2026-06-05
+
+- Added Arbin auxiliary temperature aliases for encoded `Aux_Temperature(... )_1`
+  workbook headers so they export as `Ambient Temperature (degC)`.
+
 ## 0.2.1 - 2026-06-04
 
 - Added `bds explain` diagnostics and report writers for JSON, HTML, Excel, and
