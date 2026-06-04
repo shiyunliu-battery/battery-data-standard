@@ -1,7 +1,7 @@
 # Battery Data Standard
 
-[![PyPI 0.2.0](https://img.shields.io/badge/PyPI-0.2.0-blue.svg)](https://pypi.org/project/battery-data-standard/0.2.0/)
-[![Python >=3.10](https://img.shields.io/badge/Python-%3E%3D3.10-blue.svg)](https://pypi.org/project/battery-data-standard/0.2.0/)
+[![PyPI 0.2.1](https://img.shields.io/badge/PyPI-0.2.1-blue.svg)](https://pypi.org/project/battery-data-standard/0.2.1/)
+[![Python >=3.10](https://img.shields.io/badge/Python-%3E%3D3.10-blue.svg)](https://pypi.org/project/battery-data-standard/0.2.1/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Package](https://img.shields.io/badge/package-bds-blue.svg)](https://pypi.org/project/battery-data-standard/)
 
@@ -22,7 +22,7 @@ own cycler software before using the package in automated production workflows.
 Python 3.10 or newer is required.
 
 ```bash
-pip install battery-data-standard
+pip install --upgrade battery-data-standard
 ```
 
 Optional extras are available for additional input formats:
