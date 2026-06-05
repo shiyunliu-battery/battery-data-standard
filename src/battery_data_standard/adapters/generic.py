@@ -17,6 +17,7 @@ class GenericAdapter(Adapter):
     display_name = "Generic CSV/Excel/MATLAB/Parquet"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "unit-test-backed"
     extensions = (".csv", ".txt", ".tsv", ".xlsx", ".xls", ".mat", ".parquet")
     signatures = ("voltage", "current", "time")
     column_aliases: dict[str, tuple[str, ...]] = {}

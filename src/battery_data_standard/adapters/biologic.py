@@ -21,6 +21,7 @@ class BiologicAdapter(GenericAdapter):
     display_name = "BioLogic"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "public-fixture-backed"
     raw_current_sign = "charge-positive"
     extensions = (".mpt", ".mpr", ".txt", ".csv")
     signatures = ("biologic", "ec-lab", "time/s", "ewe/v", "ecell/v", "i/ma", "nb header lines")
@@ -107,6 +108,7 @@ class BiologicAdapter(GenericAdapter):
                 "repair_policy": repair_policy,
                 "adapter_version": self.adapter_version,
                 "support_tier": self.support_tier,
+                "evidence_tier": self.evidence_tier,
                 "output_rows": normalized.data.height,
             }
         )

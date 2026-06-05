@@ -253,6 +253,9 @@ def read_with_report(
     result.metadata["current_sign_sanity"] = checks.get("current_sign_sanity")
     result.metadata["semantic_sources"] = checks.get("semantic_sources")
     result.metadata["step_cycle_semantics"] = checks.get("step_cycle_semantics")
+    result.metadata["temperature_semantics_confidence"] = checks.get("temperature_semantics_confidence")
+    result.metadata["temperature_semantics"] = checks.get("temperature_semantics")
+    _extend_quality_warnings(result.warnings, checks)
 
     validation = validate(result.data, strict=strict)
     validation.issues.extend(sampling.validation_issues)
@@ -272,6 +275,7 @@ def read_with_report(
         current_sign=current_sign,
         adapter_version=result.metadata.get("adapter_version"),
         support_tier=result.metadata.get("support_tier", "best_effort"),
+        evidence_tier=result.metadata.get("evidence_tier", "best-effort"),
         detection_confidence=_candidate_confidence(detection, adapter.id),
         encoding=result.metadata.get("encoding"),
         delimiter=result.metadata.get("delimiter"),
@@ -444,6 +448,9 @@ def convert_neware_groups(
         result.metadata["current_sign_sanity"] = checks.get("current_sign_sanity")
         result.metadata["semantic_sources"] = checks.get("semantic_sources")
         result.metadata["step_cycle_semantics"] = checks.get("step_cycle_semantics")
+        result.metadata["temperature_semantics_confidence"] = checks.get("temperature_semantics_confidence")
+        result.metadata["temperature_semantics"] = checks.get("temperature_semantics")
+        _extend_quality_warnings(result.warnings, checks)
         validation = validate(result.data, strict=strict)
         validation.issues.extend(sampling.validation_issues)
         if strict and not validation.valid:
@@ -468,6 +475,7 @@ def convert_neware_groups(
             current_sign=current_sign,
             adapter_version=result.metadata.get("adapter_version"),
             support_tier=result.metadata.get("support_tier", "best_effort"),
+            evidence_tier=result.metadata.get("evidence_tier", "best-effort"),
             detection_confidence=_candidate_confidence(detection, adapter.id),
             encoding=result.metadata.get("encoding"),
             delimiter=result.metadata.get("delimiter"),
@@ -654,6 +662,17 @@ def _set_export_report_metadata(
     report.metadata["export_target"] = normalize_export_target(target)
     report.metadata["internal_columns"] = list(internal_df.columns)
     report.metadata["export_columns"] = list(export_df.columns)
+
+
+def _extend_quality_warnings(warnings: list[str], checks: dict[str, Any]) -> None:
+    temperature = checks.get("temperature_semantics")
+    if isinstance(temperature, dict) and temperature.get("confidence") == "low":
+        warning = str(
+            temperature.get("warning")
+            or "Temperature was mapped as ambient/chamber but may represent a surface sensor."
+        )
+        if warning not in warnings:
+            warnings.append(warning)
 
 
 def _write_conversion_report_outputs(

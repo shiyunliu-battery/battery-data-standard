@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from itertools import pairwise
 from typing import Any
 
@@ -35,6 +36,9 @@ def quality_checks(
         )
         checks["semantic_sources"] = semantic_sources(provenance or [])
         checks["step_cycle_semantics"] = _step_cycle_semantics(df, checks["semantic_sources"])
+        temperature = _temperature_semantics(provenance or [])
+        checks["temperature_semantics_confidence"] = temperature["confidence"]
+        checks["temperature_semantics"] = temperature
         return checks
     if "test_time_s" in df.columns:
         times = _float_values(df["test_time_s"])
@@ -59,6 +63,9 @@ def quality_checks(
     checks["current_sign_sanity"] = sign_sanity
     checks["semantic_sources"] = semantic_sources(provenance or [])
     checks["step_cycle_semantics"] = _step_cycle_semantics(df, checks["semantic_sources"])
+    temperature = _temperature_semantics(provenance or [])
+    checks["temperature_semantics_confidence"] = temperature["confidence"]
+    checks["temperature_semantics"] = temperature
     return checks
 
 
@@ -238,6 +245,60 @@ def _step_cycle_semantics(df: pl.DataFrame, sources: dict[str, dict[str, str | N
     result.update(_repeated_step_segments(cycles, steps))
     result.update(_step_transition_discontinuities(df, cycles, steps))
     return result
+
+
+def _temperature_semantics(provenance: list[ColumnProvenance]) -> dict[str, Any]:
+    temperature_items = [
+        item for item in provenance if item.column in {"ambient_temperature_deg_c", "temperature_t1_deg_c"}
+    ]
+    if not temperature_items:
+        return {
+            "status": "absent",
+            "confidence": "absent",
+            "reason": "no temperature column was mapped",
+            "examples": [],
+        }
+
+    ambiguous = [
+        {
+            "mapped_column": item.column,
+            "source": item.source,
+            "reason": "raw temperature header does not distinguish ambient/chamber from surface sensor",
+        }
+        for item in temperature_items
+        if item.column == "ambient_temperature_deg_c" and _ambiguous_ambient_temperature_source(item.source)
+    ]
+    if ambiguous:
+        return {
+            "status": "ambiguous",
+            "confidence": "low",
+            "reason": (
+                "One or more temperature columns were mapped as ambient/chamber temperature, "
+                "but the source header is semantically ambiguous."
+            ),
+            "examples": ambiguous[:5],
+            "warning": (
+                "Temperature semantics are ambiguous: a raw temperature header was mapped to "
+                "ambient_temperature_deg_c but may represent a surface or auxiliary sensor."
+            ),
+        }
+    return {
+        "status": "ok",
+        "confidence": "high",
+        "reason": "mapped temperature headers were explicit enough for the selected canonical field",
+        "examples": [{"mapped_column": item.column, "source": item.source} for item in temperature_items[:5]],
+    }
+
+
+def _ambiguous_ambient_temperature_source(source: str) -> bool:
+    lowered = str(source).strip().lower()
+    if any(token in lowered for token in ("ambient", "chamber")):
+        return False
+    if "surface" in lowered:
+        return True
+    base = re.sub(r"\([^)]*\)|\[[^]]*\]|/.*$", "", lowered).strip()
+    slug = "".join(character for character in base if character.isalnum())
+    return slug in {"temperature", "temp", "temp1", "t", "t1"}
 
 
 def _repeated_step_segments(cycles: list[Any], steps: list[Any]) -> dict[str, Any]:

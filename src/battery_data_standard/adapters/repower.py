@@ -16,6 +16,7 @@ class RepowerAdapter(GenericAdapter):
     display_name = "Repower"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "public-fixture-backed"
     raw_current_sign = "charge-positive"
     extensions = (".csv", ".txt")
     signatures = (

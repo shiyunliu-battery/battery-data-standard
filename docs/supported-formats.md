@@ -6,18 +6,18 @@ all historical cycler software versions.
 
 ## Adapter Matrix
 
-| Cycler id | Display name | Input suffixes | Unsupported suffixes | Support tier | Scope |
-| --- | --- | --- | --- | --- | --- |
-| `neware` | NEWARE | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common NEWARE tabular exports, including flat files and workbook-style data where columns can be mapped to canonical time-series fields. |
-| `arbin` | Arbin | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common Arbin tabular exports and charge-positive current convention handling. |
-| `maccor` | Maccor | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common Maccor tabular exports, including files with metadata preambles. |
-| `biologic` | BioLogic | `.mpt`, `.mpr`, `.txt`, `.csv` | none declared | `fixture-backed` | EC-Lab text exports plus binary `.mpr` through the optional `mpr` extra (`galvani`). |
-| `repower` | Repower | `.csv`, `.txt` | none declared | `fixture-backed` | Repower CSV-style exports with `Relative Time`, `Voltage(V)`, `Current(A)`, cycle, step, and status columns. |
-| `pec` | PEC | `.csv`, `.txt` | none declared | `fixture-backed` | PEC CSV-style exports with total/step time, voltage/current, cycle/step, capacity, energy, and resistance columns. |
-| `novonix` | Novonix | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common Novonix tabular exports. |
-| `basytec` | BaSyTec | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common BaSyTec tabular exports. |
-| `landt` | LANDT | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Common LANDT tabular exports. |
-| `generic` | Generic CSV/Excel/MATLAB/Parquet | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | Generic tabular data with recognizable or profile-mapped time, voltage, and current columns. |
+| Cycler id | Display name | Input suffixes | Unsupported suffixes | Support tier | Evidence tier | Scope |
+| --- | --- | --- | --- | --- | --- | --- |
+| `neware` | NEWARE | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `public-fixture-backed` | Common NEWARE tabular exports, including flat files and workbook-style data where columns can be mapped to canonical time-series fields. |
+| `arbin` | Arbin | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `public-fixture-backed` | Common Arbin tabular exports and charge-positive current convention handling. |
+| `maccor` | Maccor | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `public-fixture-backed` | Common Maccor tabular exports, including files with metadata preambles. |
+| `biologic` | BioLogic | `.mpt`, `.mpr`, `.txt`, `.csv` | none declared | `fixture-backed` | `public-fixture-backed` | EC-Lab text exports plus binary `.mpr` through the optional `mpr` extra (`galvani`). |
+| `repower` | Repower | `.csv`, `.txt` | none declared | `fixture-backed` | `public-fixture-backed` | Repower CSV-style exports with `Relative Time`, `Voltage(V)`, `Current(A)`, cycle, step, and status columns. |
+| `pec` | PEC | `.csv`, `.txt` | none declared | `fixture-backed` | `public-fixture-backed` | PEC CSV-style exports with total/step time, voltage/current, cycle/step, capacity, energy, and resistance columns. |
+| `novonix` | Novonix | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `public-fixture-backed` | Common Novonix tabular exports. |
+| `basytec` | BaSyTec | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `public-fixture-backed` | Common BaSyTec tabular exports. |
+| `landt` | LANDT | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `public-fixture-backed` | Common LANDT tabular exports. |
+| `generic` | Generic CSV/Excel/MATLAB/Parquet | `.csv`, `.txt`, `.tsv`, `.xlsx`, `.xls`, `.mat`, `.parquet` | none declared | `fixture-backed` | `unit-test-backed` | Generic tabular data with recognizable or profile-mapped time, voltage, and current columns. |
 
 The runtime source of truth is:
 
@@ -35,15 +35,21 @@ formats = bds.list_supported_formats()
 
 ## Support-Tier Definitions
 
-`fixture-backed` means the adapter has representative validation coverage for
-the documented path. It does not guarantee that every regional export setting,
-firmware version, delimiter, language, or workbook layout is supported.
+`support_tier` describes the support promise. `fixture-backed` means the adapter
+has representative validation coverage for the documented path. It does not
+guarantee that every regional export setting, firmware version, delimiter,
+language, or workbook layout is supported.
 
-Public fixture coverage means a reduced, anonymized source file is stored under
+`evidence_tier` describes the public proof behind that promise. Public fixture
+coverage means a reduced, anonymized source file is stored under
 `tests/fixtures/<cycler>` with a manifest that exercises detection, conversion,
 and validation. This is stronger evidence than an inline unit test that builds a
 temporary file during test execution, because users can inspect the exact headers
 and minimal raw file shape used for regression coverage.
+
+`unit-test-backed` means behavior is covered by tests but not by an inspectable
+public fixture file. `best-effort` means behavior is implemented without a
+dedicated regression evidence tier.
 
 `best_effort` is reserved for behavior that is implemented but not supported by
 representative validation coverage.

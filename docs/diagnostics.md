@@ -5,6 +5,18 @@ this file was, and what would it do to the data?"
 
 ## Single-File Explain
 
+Use `bds doctor` when a file fails to import or when you need a compact
+troubleshooting checklist rather than a full mapping report:
+
+```bash
+bds doctor raw_export.csv
+bds doctor raw_export.csv --json
+```
+
+Doctor reports include data-kind detection, adapter candidates, missing
+required columns, suspicious headers, suggested `--cycler`/`--sheet`/profile
+next steps, and the minimum anonymized fixture checklist.
+
 Use `bds explain` before conversion when a file is new, private, or failing:
 
 ```bash
@@ -25,6 +37,8 @@ The diagnostic report includes:
 - source columns, canonical columns, export columns, and mapping provenance;
 - unit transforms, current-sign evidence, and current-sign confidence;
 - semantic source notes for inferred time, step, and cycle fields;
+- temperature semantic confidence when generic headers such as `Temperature` are
+  mapped to ambient/chamber temperature;
 - repair policy, validation issues, warnings, and unmapped columns;
 - recommended next action.
 

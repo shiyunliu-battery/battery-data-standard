@@ -13,6 +13,7 @@ class LandtAdapter(GenericAdapter):
     display_name = "LANDT"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "public-fixture-backed"
     raw_current_sign = "charge-positive"
     signatures = ("landt", "land", "testtime")
     column_aliases = {

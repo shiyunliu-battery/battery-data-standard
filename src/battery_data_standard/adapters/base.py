@@ -24,6 +24,7 @@ class Adapter:
     display_name = "Abstract"
     adapter_version = "1"
     support_tier = "best_effort"
+    evidence_tier = "best-effort"
     extensions: tuple[str, ...] = ()
     signatures: tuple[str, ...] = ()
     column_aliases: dict[str, tuple[str, ...]] = {}
@@ -116,6 +117,7 @@ class Adapter:
                 "repair_policy": repair_policy,
                 "adapter_version": self.adapter_version,
                 "support_tier": self.support_tier,
+                "evidence_tier": self.evidence_tier,
                 "output_rows": normalized.data.height,
             }
         )

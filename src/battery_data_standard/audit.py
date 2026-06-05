@@ -457,6 +457,19 @@ def _check_issues(checks: dict[str, Any]) -> list[AuditIssue]:
                     f"Semantic field(s) were inferred rather than source-provided: {', '.join(inferred)}.",
                 )
             )
+    temperature = checks.get("temperature_semantics")
+    if isinstance(temperature, dict) and temperature.get("confidence") == "low":
+        issues.append(
+            AuditIssue(
+                "warning",
+                "temperature-semantics-ambiguous",
+                str(
+                    temperature.get("warning")
+                    or "Temperature was mapped as ambient/chamber but may represent a surface sensor."
+                ),
+                "ambient_temperature_deg_c",
+            )
+        )
     return issues
 
 

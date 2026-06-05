@@ -8,6 +8,8 @@
 - Switched current-sign sanity to an opt-in adjacent-point check for files that
   need extra sign review.
 - Added a fixture contribution guide for privacy-preserving regression files.
+- Added `bds doctor`, adapter `evidence_tier` metadata, and ambiguous
+  temperature-semantics warnings.
 
 ## 0.2.2 - 2026-06-05
 

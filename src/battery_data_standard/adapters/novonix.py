@@ -10,6 +10,7 @@ class NovonixAdapter(GenericAdapter):
     display_name = "Novonix"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "public-fixture-backed"
     raw_current_sign = "charge-positive"
     signatures = ("novonix", "novonix hpc data file", "[summary]", "cycle number", "step time", "run time")
     column_aliases = {

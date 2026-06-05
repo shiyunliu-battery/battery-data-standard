@@ -34,6 +34,7 @@ Audit records may include additional issue codes:
 | `repeated-step-segments` | The same step id appears in non-contiguous segments within one cycle. |
 | `step-transition-discontinuity` | A step boundary has non-increasing test time or step time that does not reset. |
 | `inferred-step-cycle-semantics` | A semantic field such as `test_time_s` was inferred rather than source-provided. |
+| `temperature-semantics-ambiguous` | A raw temperature header was mapped as ambient/chamber temperature but may represent a surface or auxiliary sensor. |
 | `conversion-error` | Conversion failed during audit. |
 | `unsupported-file` | The file was identified as helper content or unsupported data. |
 

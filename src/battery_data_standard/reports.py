@@ -88,6 +88,7 @@ class ConversionReport:
     current_sign: str = "charge-positive"
     adapter_version: str | None = None
     support_tier: str = "best_effort"
+    evidence_tier: str = "best-effort"
     detection_confidence: float | None = None
     encoding: str | None = None
     delimiter: str | None = None

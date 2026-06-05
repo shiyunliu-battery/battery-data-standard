@@ -18,6 +18,7 @@ class BasytecAdapter(GenericAdapter):
     display_name = "BaSyTec"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "public-fixture-backed"
     raw_current_sign = "charge-positive"
     signatures = ("basytec", "run_time", "c_vol", "c_cur", "~time[h]", "u[v]", "i[a]")
     column_aliases = {

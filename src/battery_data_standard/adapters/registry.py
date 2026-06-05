@@ -115,6 +115,7 @@ def adapter_metadata() -> list[dict[str, object]]:
             "cycler": adapter.id,
             "display_name": adapter.display_name,
             "support_tier": adapter.support_tier,
+            "evidence_tier": adapter.evidence_tier,
             "extensions": list(adapter.extensions),
             "unsupported_extensions": list(getattr(adapter, "unsupported_extensions", ())),
             "adapter_version": adapter.adapter_version,

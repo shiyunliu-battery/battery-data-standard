@@ -231,6 +231,25 @@ Archives are expanded into temporary storage. Supported archive suffixes are
 
 ## Intake Audit
 
+### `doctor`
+
+```python
+report = bds.doctor("raw_export.csv", cycler="auto")
+```
+
+Returns `DoctorReport` for one file without writing converted data. The report
+focuses on troubleshooting: data kind, adapter candidates, selected adapter,
+missing required columns, validation issues, warnings, unmapped columns,
+suspicious headers, suggested next steps, and the minimum anonymized fixture
+checklist.
+
+The equivalent CLI is:
+
+```bash
+bds doctor raw_export.csv
+bds doctor raw_export.csv --json
+```
+
 ### `explain`
 
 ```python
@@ -330,7 +349,7 @@ list_supported_formats()
 ```
 
 Returns adapter metadata including cycler id, display name, support tier,
-extensions, unsupported extensions, and adapter version.
+evidence tier, extensions, unsupported extensions, and adapter version.
 
 ### `group_neware_files`
 
@@ -377,7 +396,7 @@ is available from `battery_data_standard.api`.
 `ConversionReport` includes:
 
 - `input_path` and `output_path`;
-- `cycler`, `adapter_version`, `support_tier`, and `detection_confidence`;
+- `cycler`, `adapter_version`, `support_tier`, `evidence_tier`, and `detection_confidence`;
 - `schema_version`, `rows`, and `columns`;
 - `validation`, a `ValidationReport`;
 - `warnings`, `provenance`, and `metadata`;
@@ -393,7 +412,9 @@ and inserted row count when repair is applied.
 
 Current-sign and step/cycle sanity findings are stored in
 `metadata["current_sign_sanity"]`, `metadata["current_sign_confidence"]`,
-`metadata["semantic_sources"]`, and `metadata["step_cycle_semantics"]`. These
+`metadata["semantic_sources"]`, and `metadata["step_cycle_semantics"]`.
+Temperature semantic findings are stored in `metadata["temperature_semantics"]`
+and `metadata["temperature_semantics_confidence"]`. These
 records are conservative diagnostics; they warn about trust-affecting ambiguity
 but do not automatically change scientific semantics.
 

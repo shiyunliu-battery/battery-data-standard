@@ -129,9 +129,16 @@ because they omit fields such as temperature or energy.
 Inspect runtime adapter metadata and the pinned schema:
 
 ```bash
+bds doctor raw_export.csv
 bds formats
 bds inspect-schema
 ```
+
+Use `bds doctor` when a file fails or when you need a short troubleshooting
+report with adapter candidates, missing required columns, suspicious headers,
+suggested next steps, and a minimum anonymized fixture checklist. `bds formats`
+also reports each adapter's support tier and evidence tier so users can tell
+whether support is backed by public fixtures or unit tests.
 
 ## Python API
 

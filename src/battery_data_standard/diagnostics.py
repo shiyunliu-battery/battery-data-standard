@@ -32,6 +32,8 @@ class ExplainReport:
     current_sign_evidence: str | None = None
     current_sign_confidence: str | None = None
     current_sign_sanity: dict[str, Any] | None = None
+    temperature_semantics_confidence: str | None = None
+    temperature_semantics: dict[str, Any] | None = None
     semantic_sources: dict[str, Any] | None = None
     step_cycle_semantics: dict[str, Any] | None = None
     repair_policy: str = "warn"
@@ -68,6 +70,8 @@ class ExplainReport:
             lines.append(f"Current sign confidence: {self.current_sign_confidence}")
         if self.current_sign_sanity and self.current_sign_sanity.get("status") == "suspicious":
             lines.append(f"Current sign warning: {self.current_sign_sanity.get('reason')}")
+        if self.temperature_semantics_confidence == "low" and self.temperature_semantics:
+            lines.append(f"Temperature warning: {self.temperature_semantics.get('reason')}")
         if self.validation:
             lines.append(f"Validation valid: {self.validation.get('valid')}")
         if self.time_sampling:
@@ -176,6 +180,8 @@ def explain(
             current_sign_evidence=current_sign_evidence,
             current_sign_confidence=report.metadata.get("current_sign_confidence"),
             current_sign_sanity=report.metadata.get("current_sign_sanity"),
+            temperature_semantics_confidence=report.metadata.get("temperature_semantics_confidence"),
+            temperature_semantics=report.metadata.get("temperature_semantics"),
             semantic_sources=report.metadata.get("semantic_sources"),
             step_cycle_semantics=report.metadata.get("step_cycle_semantics"),
             repair_policy=repair_policy,

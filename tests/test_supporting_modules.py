@@ -538,6 +538,53 @@ def test_inferred_test_time_semantics_are_reported(tmp_path):
     assert any(issue.code == "inferred-step-cycle-semantics" for issue in record.issues)
 
 
+def test_temperature_semantics_flags_ambiguous_ambient_mapping(tmp_path):
+    raw = tmp_path / "ambiguous_temperature.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A),Temperature\n"
+        "0,3.40,0.1,25.0\n"
+        "1,3.41,0.1,25.1\n"
+        "2,3.42,0.1,25.2\n",
+        encoding="utf-8",
+    )
+
+    df, report = bds.read_with_report(raw, cycler="generic", current_sign="preserve", strict=False)
+    audit_report = audit(raw, cycler="generic", current_sign="preserve")
+    explain_report = bds.explain(raw, cycler="generic", current_sign="preserve")
+
+    assert "ambient_temperature_deg_c" in df.columns
+    assert report.metadata["temperature_semantics_confidence"] == "low"
+    assert report.metadata["temperature_semantics"]["status"] == "ambiguous"
+    assert any("Temperature semantics are ambiguous" in warning for warning in report.warnings)
+    assert any(issue.code == "temperature-semantics-ambiguous" for issue in audit_report.records[0].issues)
+    assert explain_report.temperature_semantics_confidence == "low"
+
+
+def test_temperature_semantics_accepts_explicit_temperature_headers(tmp_path):
+    ambient = tmp_path / "ambient_temperature.csv"
+    ambient.write_text(
+        "Test Time (s),Voltage (V),Current (A),Ambient Temperature / degC\n"
+        "0,3.40,0.1,25.0\n"
+        "1,3.41,0.1,25.1\n",
+        encoding="utf-8",
+    )
+    surface = tmp_path / "surface_temperature.csv"
+    surface.write_text(
+        "Test Time (s),Voltage (V),Current (A),Surface Temperature T1\n0,3.40,0.1,25.0\n1,3.41,0.1,25.1\n",
+        encoding="utf-8",
+    )
+
+    _, ambient_report = bds.read_with_report(ambient, cycler="generic", current_sign="preserve", strict=False)
+    surface_df, surface_report = bds.read_with_report(
+        surface, cycler="generic", current_sign="preserve", strict=False
+    )
+
+    assert ambient_report.metadata["temperature_semantics_confidence"] == "high"
+    assert "temperature_t1_deg_c" in surface_df.columns
+    assert surface_report.metadata["temperature_semantics_confidence"] == "high"
+    assert all("Temperature semantics are ambiguous" not in warning for warning in surface_report.warnings)
+
+
 def test_audit_skips_fixture_manifests_and_keeps_optional_completeness_separate():
     fixture_root = Path(__file__).parent / "fixtures"
 
@@ -651,6 +698,65 @@ def test_cli_explain_json_and_text(tmp_path):
 
     assert json.loads(json_run.stdout)["status"] == "ok"
     assert "BDS explain" in text_run.stdout
+
+
+def test_cli_doctor_reports_missing_columns_and_fixture_checklist(tmp_path):
+    raw = tmp_path / "bad.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V)\n0,3.40\n1,3.41\n",
+        encoding="utf-8",
+    )
+
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "battery_data_standard.cli",
+            "doctor",
+            str(raw),
+            "--cycler",
+            "generic",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert run.returncode == 0
+    assert "BDS doctor" in run.stdout
+    assert "Missing required columns" in run.stdout
+    assert "current_a" in run.stdout
+    assert "Minimum fixture checklist" in run.stdout
+
+
+def test_cli_doctor_json_reports_candidates_and_suggestions(tmp_path):
+    raw = tmp_path / "good.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A)\n0,3.40,0.1\n1,3.41,0.1\n",
+        encoding="utf-8",
+    )
+
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "battery_data_standard.cli",
+            "doctor",
+            str(raw),
+            "--cycler",
+            "generic",
+            "--json",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(run.stdout)
+
+    assert run.returncode == 0
+    assert payload["status"] == "ok"
+    assert payload["detection"]["candidates"]
+    assert payload["suggestions"]
 
 
 def test_cli_explain_writes_user_facing_reports(tmp_path):
@@ -819,12 +925,35 @@ def test_supported_formats_expose_maturity_metadata():
     formats = list_supported_formats()
 
     assert any(item["cycler"] == "neware" and item["support_tier"] == "fixture-backed" for item in formats)
+    assert any(
+        item["cycler"] == "neware" and item["evidence_tier"] == "public-fixture-backed" for item in formats
+    )
     biologic = next(item for item in formats if item["cycler"] == "biologic")
     assert ".mpt" in biologic["extensions"]
     assert ".mpr" in biologic["extensions"]
     assert not biologic["unsupported_extensions"]
+    assert biologic["evidence_tier"] == "public-fixture-backed"
+    generic = next(item for item in formats if item["cycler"] == "generic")
+    assert generic["support_tier"] == "fixture-backed"
+    assert generic["evidence_tier"] == "unit-test-backed"
     assert any(item["cycler"] == "repower" for item in formats)
     assert any(item["cycler"] == "pec" for item in formats)
+
+
+def test_cli_formats_exposes_evidence_tier():
+    run = subprocess.run(
+        [sys.executable, "-m", "battery_data_standard.cli", "formats"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(run.stdout)
+
+    assert run.returncode == 0
+    assert any(
+        item["cycler"] == "neware" and item["evidence_tier"] == "public-fixture-backed"
+        for item in payload["formats"]
+    )
 
 
 def test_export_targets_are_discoverable():

@@ -10,6 +10,7 @@ class ArbinAdapter(GenericAdapter):
     display_name = "Arbin"
     adapter_version = "1"
     support_tier = "fixture-backed"
+    evidence_tier = "public-fixture-backed"
     raw_current_sign = "charge-positive"
     signatures = (
         "arbin",

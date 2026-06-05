@@ -22,6 +22,7 @@ from .api import (
 )
 from .audit import audit
 from .diagnostics import explain
+from .doctor import doctor
 from .exceptions import (
     BatteryDataStandardError,
     DetectionError,
@@ -59,6 +60,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     detect_kind_parser.add_argument("file")
     detect_kind_parser.add_argument("--sheet")
+
+    doctor_parser = subparsers.add_parser("doctor", help="Diagnose why one file may not convert cleanly")
+    doctor_parser.add_argument("file")
+    doctor_parser.add_argument("--cycler", default="auto")
+    doctor_parser.add_argument("--detect-threshold", type=float, default=0.1)
+    doctor_parser.add_argument("--profile")
+    doctor_parser.add_argument("--sheet")
+    doctor_parser.add_argument(
+        "--current-sign",
+        choices=("preserve", "discharge-positive", "charge-positive"),
+        default="charge-positive",
+    )
+    doctor_parser.add_argument(
+        "--current-sign-check",
+        choices=("adjacent", "none"),
+        default="none",
+        help="How to run current-sign sanity checks. Use adjacent to enable the O(n) adjacent-point check.",
+    )
+    doctor_parser.add_argument(
+        "--repair-policy",
+        choices=("none", "warn", "repair"),
+        default="warn",
+        help="How to handle repairable table issues during the diagnostic conversion.",
+    )
+    doctor_parser.add_argument("--json", action="store_true", help="Print the doctor report as JSON.")
 
     explain_parser = subparsers.add_parser(
         "explain", help="Explain detection, mapping, validation, and export"
@@ -288,6 +314,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(detect(args.file).to_dict(), indent=2))
         elif args.command == "detect-kind":
             print(json.dumps(detect_kind(args.file, sheet=args.sheet).to_dict(), indent=2))
+        elif args.command == "doctor":
+            doctor_report = doctor(
+                args.file,
+                cycler=args.cycler,
+                profile=args.profile,
+                current_sign=args.current_sign,
+                current_sign_check=args.current_sign_check,
+                repair_policy=args.repair_policy,
+                detection_threshold=args.detect_threshold,
+                sheet=args.sheet,
+            )
+            print(doctor_report.to_json() if args.json else doctor_report.to_text())
         elif args.command == "explain":
             explain_report = explain(
                 args.file,

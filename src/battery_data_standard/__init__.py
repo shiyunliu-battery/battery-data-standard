@@ -19,6 +19,7 @@ from .api import (
 )
 from .audit import AuditRecord, AuditReport, audit, audit_file
 from .diagnostics import ExplainReport, explain
+from .doctor import DoctorReport, doctor
 from .exceptions import (
     AmbiguousDetectionError,
     BatteryDataStandardError,
@@ -53,6 +54,7 @@ __all__ = [
     "ConversionError",
     "DetectionResult",
     "DetectionError",
+    "DoctorReport",
     "ExplainReport",
     "FileIOError",
     "UnsupportedFeatureError",
@@ -68,6 +70,7 @@ __all__ = [
     "convert_neware_groups",
     "detect",
     "detect_kind",
+    "doctor",
     "explain",
     "group_neware_files",
     "list_export_targets",
