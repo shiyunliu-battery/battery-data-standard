@@ -40,7 +40,7 @@ body:
     id: fixture
     attributes:
       label: Reduced fixture
-      description: Attach a reduced/anonymized file if possible, and state whether it may be added to public regression tests.
+      description: Attach a reduced/anonymized file if possible, and state whether it may be added to public regression tests. See docs/fixture-contribution.md for safe trimming guidance.
   - type: textarea
     id: context
     attributes:

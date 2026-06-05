@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Added Repower and PEC public fixture coverage.
+- Added current-sign sanity and step/cycle semantic diagnostics to conversion
+  metadata and audit reports.
+- Switched current-sign sanity to an opt-in adjacent-point check for files that
+  need extra sign review.
+- Added a fixture contribution guide for privacy-preserving regression files.
 
 ## 0.2.2 - 2026-06-05
 

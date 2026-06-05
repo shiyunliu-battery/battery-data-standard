@@ -4,19 +4,16 @@ from __future__ import annotations
 
 import html
 import json
-import math
 from collections import Counter
 from dataclasses import asdict, dataclass, field
-from itertools import pairwise
 from pathlib import Path
 from typing import Any
-
-import polars as pl
 
 from .api import detect, detect_kind, read_eis, read_with_report
 from .archive import is_supported_source_path
 from .eis import validate_eis
 from .io import write_json
+from .quality import quality_checks
 from .reports import ColumnProvenance, ValidationIssue
 from .schema import OPTIONAL_COLUMNS, REQUIRED_COLUMNS
 from .validation import validate
@@ -96,6 +93,7 @@ def audit(
     cycler: str | None = "auto",
     profile: str | Path | dict[str, Any] | None = None,
     current_sign: str = "charge-positive",
+    current_sign_check: str = "none",
     repair_policy: str = "warn",
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
@@ -112,6 +110,7 @@ def audit(
             cycler=cycler,
             profile=profile,
             current_sign=current_sign,
+            current_sign_check=current_sign_check,
             repair_policy=repair_policy,
             detection_threshold=detection_threshold,
             sheet=sheet,
@@ -133,6 +132,7 @@ def audit_file(
     cycler: str | None = "auto",
     profile: str | Path | dict[str, Any] | None = None,
     current_sign: str = "charge-positive",
+    current_sign_check: str = "none",
     repair_policy: str = "warn",
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
@@ -171,12 +171,18 @@ def audit_file(
             strict=False,
             keep_raw=False,
             current_sign=current_sign,
+            current_sign_check=current_sign_check,
             repair_policy=repair_policy,
             detection_threshold=detection_threshold,
             sheet=sheet,
         )
         validation = validate(df, strict=False)
-        checks = _quality_checks(df)
+        checks = quality_checks(
+            df,
+            provenance=report.provenance,
+            current_sign=report.current_sign,
+            current_sign_check=current_sign_check,
+        )
         validation_issues = _quality_scored_validation_issues(validation.issues)
         issues.extend(_validation_issues(validation_issues))
         issues.extend(_check_issues(checks))
@@ -341,60 +347,6 @@ def _is_audit_source(path: Path) -> bool:
     return is_supported_source_path(path, _AUDIT_INPUT_SUFFIXES)
 
 
-def _quality_checks(df: pl.DataFrame) -> dict[str, Any]:
-    checks: dict[str, Any] = {}
-    if df.is_empty():
-        return checks
-    if "test_time_s" in df.columns:
-        times = _float_values(df["test_time_s"])
-        finite_times = [value for value in times if value is not None and math.isfinite(value)]
-        duplicate_count = len(finite_times) - len(set(finite_times))
-        non_monotonic = sum(1 for left, right in pairwise(finite_times) if right <= left)
-        checks["duplicated_timestamps"] = duplicate_count
-        checks["non_monotonic_time"] = non_monotonic
-    if "voltage_v" in df.columns:
-        checks["suspicious_flat_voltage"] = _flat_signal(df["voltage_v"])
-    if "current_a" in df.columns:
-        checks["suspicious_flat_current"] = _flat_signal(df["current_a"])
-    if "cycle_index" in df.columns:
-        checks["cycle_anomalies"] = _index_anomalies(df["cycle_index"])
-    if "step_index" in df.columns:
-        checks["step_anomalies"] = _index_anomalies(df["step_index"])
-    return checks
-
-
-def _flat_signal(series: pl.Series) -> dict[str, Any]:
-    values = [value for value in _float_values(series) if value is not None and math.isfinite(value)]
-    if len(values) < 10:
-        return {"flag": False, "reason": "fewer than 10 numeric points"}
-    span = max(values) - min(values)
-    mean_abs = sum(abs(value) for value in values) / len(values)
-    tolerance = max(1e-9, mean_abs * 1e-6)
-    return {"flag": span <= tolerance, "span": span, "points": len(values)}
-
-
-def _index_anomalies(series: pl.Series) -> dict[str, int]:
-    values = [value for value in _float_values(series) if value is not None and math.isfinite(value)]
-    decreases = sum(1 for left, right in pairwise(values) if right < left)
-    negative = sum(1 for value in values if value < 0)
-    return {"decreases": decreases, "negative_values": negative}
-
-
-def _float_values(series: pl.Series) -> list[float | None]:
-    values: list[float | None] = []
-    for value in series.to_list():
-        if value is None:
-            values.append(None)
-            continue
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            values.append(None)
-            continue
-        values.append(number)
-    return values
-
-
 def _validation_issues(issues: list[ValidationIssue]) -> list[AuditIssue]:
     return [AuditIssue(issue.level, issue.code, issue.message, issue.column) for issue in issues]
 
@@ -459,6 +411,50 @@ def _check_issues(checks: dict[str, Any]) -> list[AuditIssue]:
                     f"{column} has decreases={value.get('decreases', 0)} and "
                     f"negative_values={value.get('negative_values', 0)}.",
                     column,
+                )
+            )
+    current_sign_sanity = checks.get("current_sign_sanity")
+    if isinstance(current_sign_sanity, dict) and current_sign_sanity.get("status") == "suspicious":
+        issues.append(
+            AuditIssue(
+                "warning",
+                "current-sign-suspicious",
+                str(
+                    current_sign_sanity.get("reason")
+                    or "current sign conflicts with adjacent voltage trends."
+                ),
+                "current_a",
+            )
+        )
+    step_cycle = checks.get("step_cycle_semantics")
+    if isinstance(step_cycle, dict):
+        repeated = int(step_cycle.get("repeated_step_segments") or 0)
+        if repeated:
+            issues.append(
+                AuditIssue(
+                    "warning",
+                    "repeated-step-segments",
+                    f"{repeated} non-contiguous repeated step segment(s) were detected within a cycle.",
+                    "step_index",
+                )
+            )
+        discontinuities = int(step_cycle.get("step_transition_discontinuities") or 0)
+        if discontinuities:
+            issues.append(
+                AuditIssue(
+                    "warning",
+                    "step-transition-discontinuity",
+                    f"{discontinuities} step transition discontinuity/discontinuities were detected.",
+                    "step_index",
+                )
+            )
+        inferred = list(step_cycle.get("inferred_fields") or [])
+        if inferred:
+            issues.append(
+                AuditIssue(
+                    "warning",
+                    "inferred-step-cycle-semantics",
+                    f"Semantic field(s) were inferred rather than source-provided: {', '.join(inferred)}.",
                 )
             )
     return issues

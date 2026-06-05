@@ -23,7 +23,8 @@ The diagnostic report includes:
 - data kind: time-series, EIS, unsupported, or unknown;
 - adapter candidates, selected adapter, confidence, and sheet;
 - source columns, canonical columns, export columns, and mapping provenance;
-- unit transforms and current-sign evidence;
+- unit transforms, current-sign evidence, and current-sign confidence;
+- semantic source notes for inferred time, step, and cycle fields;
 - repair policy, validation issues, warnings, and unmapped columns;
 - recommended next action.
 
@@ -71,6 +72,10 @@ bds.convert(
 
 HTML, Excel, and PDF reports use the same section structure and blue visual
 style. JSON remains the source of truth for automated pipelines.
+
+Current-sign sanity is optional. Use `current_sign_check="adjacent"` in Python,
+or `--current-sign-check adjacent` in the CLI, to run the O(n) adjacent-point
+heuristic when a file needs extra sign review.
 
 ## Time Sampling
 

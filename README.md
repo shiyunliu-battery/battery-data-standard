@@ -305,6 +305,11 @@ discharge-positive current. When a source file contains a recognizable
 charge/discharge status column, adapters use it to normalize current sign more
 explicitly.
 
+BDS can record a warning-only adjacent-point current-sign sanity check in
+conversion metadata and audit records when `current_sign` is charge-positive or
+discharge-positive. Use `--current-sign-check adjacent` to enable this O(n)
+heuristic for files that need extra sign review.
+
 ## Validation and Reports
 
 Every conversion returns a machine-readable report with schema version, row
@@ -331,6 +336,7 @@ Public documentation is in the `docs` directory:
 - [Step and cycle semantics](docs/step-cycle-semantics.md)
 - [BDF compatibility status](docs/bdf-compatibility.md)
 - [Warning and issue codes](docs/warning-codes.md)
+- [Fixture contribution guide](docs/fixture-contribution.md)
 - [Ecosystem integrations](docs/integrations.md)
 
 ## License and Attribution

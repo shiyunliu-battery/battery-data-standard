@@ -425,6 +425,119 @@ def test_audit_scores_converted_unsupported_and_suspicious_files(tmp_path):
     assert suspicious.quality_score < 100
 
 
+def test_audit_flags_current_sign_sanity_conflicts(tmp_path):
+    raw = tmp_path / "sign_conflict.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A),Discharging Capacity (Ah)\n"
+        "0,3.40,-1.0,0.00\n"
+        "1,3.45,-1.0,0.01\n"
+        "2,3.50,-1.0,0.02\n"
+        "3,3.55,-1.0,0.03\n",
+        encoding="utf-8",
+    )
+
+    report = audit(raw, cycler="generic", current_sign="charge-positive", current_sign_check="adjacent")
+    record = report.records[0]
+
+    assert record.checks["current_sign_confidence"] in {"medium", "high"}
+    assert record.checks["current_sign_sanity"]["status"] == "suspicious"
+    assert any(issue.code == "current-sign-suspicious" for issue in record.issues)
+
+
+def test_audit_does_not_overstate_short_current_sign_checks(tmp_path):
+    raw = tmp_path / "short.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A)\n0,3.40,-1.0\n1,3.45,-1.0\n",
+        encoding="utf-8",
+    )
+
+    report = audit(raw, cycler="generic", current_sign="charge-positive", current_sign_check="adjacent")
+    record = report.records[0]
+
+    assert record.checks["current_sign_confidence"] == "inconclusive"
+    assert record.checks["current_sign_sanity"]["status"] == "inconclusive"
+    assert all(issue.code != "current-sign-suspicious" for issue in record.issues)
+
+
+def test_audit_can_disable_current_sign_sanity_check(tmp_path):
+    raw = tmp_path / "sign_conflict.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A),Discharging Capacity (Ah)\n"
+        "0,3.40,-1.0,0.00\n"
+        "1,3.45,-1.0,0.01\n"
+        "2,3.50,-1.0,0.02\n"
+        "3,3.55,-1.0,0.03\n",
+        encoding="utf-8",
+    )
+
+    report = audit(raw, cycler="generic", current_sign="charge-positive", current_sign_check="none")
+    record = report.records[0]
+
+    assert record.checks["current_sign_confidence"] == "disabled"
+    assert record.checks["current_sign_sanity"]["status"] == "disabled"
+    assert all(issue.code != "current-sign-suspicious" for issue in record.issues)
+
+
+def test_audit_flags_non_contiguous_repeated_steps(tmp_path):
+    raw = tmp_path / "repeated_steps.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A),Cycle Count,Step Index\n"
+        "0,3.40,0.1,1,1\n"
+        "1,3.41,0.1,1,1\n"
+        "2,3.42,0.1,1,2\n"
+        "3,3.43,0.1,1,2\n"
+        "4,3.44,0.1,1,1\n"
+        "5,3.45,0.1,1,1\n",
+        encoding="utf-8",
+    )
+
+    report = audit(raw, cycler="generic", current_sign="preserve")
+    record = report.records[0]
+
+    assert record.checks["step_cycle_semantics"]["repeated_step_segments"] == 1
+    assert any(issue.code == "repeated-step-segments" for issue in record.issues)
+
+
+def test_audit_flags_step_transition_discontinuities(tmp_path):
+    raw = tmp_path / "step_transition.csv"
+    raw.write_text(
+        "Test Time (s),Step Time (s),Voltage (V),Current (A),Cycle Count,Step Index\n"
+        "0,0,3.40,0.1,1,1\n"
+        "1,1,3.41,0.1,1,1\n"
+        "2,2,3.42,0.1,1,2\n"
+        "3,3,3.43,0.1,1,2\n",
+        encoding="utf-8",
+    )
+
+    report = audit(raw, cycler="generic", current_sign="preserve")
+    record = report.records[0]
+
+    assert record.checks["step_cycle_semantics"]["step_transition_discontinuities"] == 1
+    assert any(issue.code == "step-transition-discontinuity" for issue in record.issues)
+
+
+def test_inferred_test_time_semantics_are_reported(tmp_path):
+    raw = tmp_path / "inferred_time.csv"
+    raw.write_text(
+        "Step Time (s),Voltage (V),Current (A),Step Index\n"
+        "0,3.40,0.1,1\n"
+        "1,3.41,0.1,1\n"
+        "0,3.42,0.1,2\n"
+        "1,3.43,0.1,2\n",
+        encoding="utf-8",
+    )
+
+    _df, conversion_report = bds.read_with_report(
+        raw, cycler="generic", current_sign="preserve", strict=False
+    )
+    audit_report = audit(raw, cycler="generic", current_sign="preserve")
+    record = audit_report.records[0]
+
+    assert conversion_report.metadata["semantic_sources"]["test_time_s"]["origin"] == "inferred"
+    assert "test_time_s" in record.checks["step_cycle_semantics"]["inferred_fields"]
+    assert any(issue.code == "inferred-step-cycle-semantics" for issue in record.issues)
+
+
 def test_audit_skips_fixture_manifests_and_keeps_optional_completeness_separate():
     fixture_root = Path(__file__).parent / "fixtures"
 

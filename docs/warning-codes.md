@@ -28,8 +28,12 @@ Audit records may include additional issue codes:
 | `non-monotonic-time` | One or more elapsed-time transitions moved backward or stayed flat. |
 | `suspicious-flat-voltage` | Voltage appears flat across enough points to be suspicious. |
 | `suspicious-flat-current` | Current appears flat across enough points to be suspicious. |
+| `current-sign-suspicious` | Current sign conflicts with adjacent voltage trends. |
 | `cycle-anomalies` | Cycle index has decreases or negative values. |
 | `step-anomalies` | Step index has decreases or negative values. |
+| `repeated-step-segments` | The same step id appears in non-contiguous segments within one cycle. |
+| `step-transition-discontinuity` | A step boundary has non-increasing test time or step time that does not reset. |
+| `inferred-step-cycle-semantics` | A semantic field such as `test_time_s` was inferred rather than source-provided. |
 | `conversion-error` | Conversion failed during audit. |
 | `unsupported-file` | The file was identified as helper content or unsupported data. |
 

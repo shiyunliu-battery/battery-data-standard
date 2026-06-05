@@ -13,4 +13,5 @@ This directory contains public documentation for `battery-data-standard`.
 - [Step and cycle semantics](step-cycle-semantics.md)
 - [BDF compatibility status](bdf-compatibility.md)
 - [Warning and issue codes](warning-codes.md)
+- [Fixture contribution guide](fixture-contribution.md)
 - [Ecosystem integrations](integrations.md)

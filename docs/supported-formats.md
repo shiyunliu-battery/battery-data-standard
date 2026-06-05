@@ -39,6 +39,12 @@ formats = bds.list_supported_formats()
 the documented path. It does not guarantee that every regional export setting,
 firmware version, delimiter, language, or workbook layout is supported.
 
+Public fixture coverage means a reduced, anonymized source file is stored under
+`tests/fixtures/<cycler>` with a manifest that exercises detection, conversion,
+and validation. This is stronger evidence than an inline unit test that builds a
+temporary file during test execution, because users can inspect the exact headers
+and minimal raw file shape used for regression coverage.
+
 `best_effort` is reserved for behavior that is implemented but not supported by
 representative validation coverage.
 

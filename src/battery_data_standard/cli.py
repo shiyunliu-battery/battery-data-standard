@@ -80,6 +80,12 @@ def main(argv: list[str] | None = None) -> int:
         default="charge-positive",
     )
     explain_parser.add_argument(
+        "--current-sign-check",
+        choices=("adjacent", "none"),
+        default="none",
+        help="How to run current-sign sanity checks. Use adjacent to enable the O(n) adjacent-point check.",
+    )
+    explain_parser.add_argument(
         "--repair-policy",
         choices=("none", "warn", "repair"),
         default="warn",
@@ -118,6 +124,12 @@ def main(argv: list[str] | None = None) -> int:
         "--current-sign",
         choices=("preserve", "discharge-positive", "charge-positive"),
         default="charge-positive",
+    )
+    convert_parser.add_argument(
+        "--current-sign-check",
+        choices=("adjacent", "none"),
+        default="none",
+        help="How to run current-sign sanity checks. Use adjacent to enable the O(n) adjacent-point check.",
     )
     convert_parser.add_argument("--no-strict", action="store_true")
     convert_parser.add_argument("--sidecars", action="store_true")
@@ -199,6 +211,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=("preserve", "discharge-positive", "charge-positive"),
         default="charge-positive",
     )
+    batch_parser.add_argument(
+        "--current-sign-check",
+        choices=("adjacent", "none"),
+        default="none",
+        help="How to run current-sign sanity checks. Use adjacent to enable the O(n) adjacent-point check.",
+    )
     batch_parser.add_argument("--no-strict", action="store_true")
     batch_parser.add_argument("--sidecars", action="store_true")
     batch_parser.add_argument(
@@ -246,6 +264,12 @@ def main(argv: list[str] | None = None) -> int:
         default="charge-positive",
     )
     audit_parser.add_argument(
+        "--current-sign-check",
+        choices=("adjacent", "none"),
+        default="none",
+        help="How to run current-sign sanity checks. Use adjacent to enable the O(n) adjacent-point check.",
+    )
+    audit_parser.add_argument(
         "--repair-policy",
         choices=("none", "warn", "repair"),
         default="warn",
@@ -270,6 +294,7 @@ def main(argv: list[str] | None = None) -> int:
                 cycler=args.cycler,
                 profile=args.profile,
                 current_sign=args.current_sign,
+                current_sign_check=args.current_sign_check,
                 repair_policy=args.repair_policy,
                 detection_threshold=args.detect_threshold,
                 sheet=args.sheet,
@@ -290,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
                 strict=not args.no_strict,
                 keep_raw=args.keep_raw,
                 current_sign=args.current_sign,
+                current_sign_check=args.current_sign_check,
                 repair_policy=args.repair_policy,
                 time_sampling_policy=args.time_sampling_policy,
                 time_sampling_interval_s=args.time_sampling_interval,
@@ -330,6 +356,7 @@ def main(argv: list[str] | None = None) -> int:
                 strict=not args.no_strict,
                 keep_raw=args.keep_raw,
                 current_sign=args.current_sign,
+                current_sign_check=args.current_sign_check,
                 repair_policy=args.repair_policy,
                 time_sampling_policy=args.time_sampling_policy,
                 time_sampling_interval_s=args.time_sampling_interval,
@@ -364,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
                 cycler=args.cycler,
                 profile=args.profile,
                 current_sign=args.current_sign,
+                current_sign_check=args.current_sign_check,
                 repair_policy=args.repair_policy,
                 detection_threshold=args.detect_threshold,
                 sheet=args.sheet,

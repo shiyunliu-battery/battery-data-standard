@@ -1,0 +1,1 @@
+{"name":"pec_basic_csv","input":"basic.csv","cycler_arg":"auto","expected_cycler":"pec","current_sign":"preserve","repair_policy":"warn","min_rows":2,"required_columns":["test_time_s","voltage_v","current_a"],"expected_first_time":0.0}

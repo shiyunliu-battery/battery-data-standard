@@ -1,0 +1,5 @@
+TestRegime Name,Formation
+Start Time,2025-01-01 00:00:00
+Total Time (Seconds),Step Time (Seconds),Voltage (mV),Current (mA),Cycle,Step,Charge Capacity (mAh),Discharge Capacity (mAh),Internal Resistance 1 (mOhm)
+0,0,3400,100,0,0,0,0,10
+1,1,3500,-50,0,1,100,0,11

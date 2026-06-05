@@ -39,6 +39,7 @@ from .io import read_bds_like, write_dataframe, write_json, write_jsonl
 from .kind import DataKindResult
 from .kind import detect_kind as _detect_kind
 from .profiles import load_profile
+from .quality import quality_checks
 from .reports import ConversionReport, DetectionResult, ValidationReport
 from .schema import BDS_SCHEMA_VERSION
 from .time_sampling import apply_time_sampling_policy
@@ -182,6 +183,7 @@ def read_with_report(
     time_sampling_tolerance: float = 0.1,
     time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
+    current_sign_check: str = "none",
     sheet: str | int | None = None,
 ) -> tuple[pl.DataFrame, ConversionReport]:
     """Read a file and return both normalized data and a conversion report.
@@ -241,6 +243,16 @@ def read_with_report(
         result.metadata["repair_operations"] = repair_operations
     result.metadata["time_sampling"] = sampling.metadata
     result.metadata["output_rows"] = result.data.height
+    checks = quality_checks(
+        result.data,
+        provenance=result.provenance,
+        current_sign=current_sign,
+        current_sign_check=current_sign_check,
+    )
+    result.metadata["current_sign_confidence"] = checks.get("current_sign_confidence")
+    result.metadata["current_sign_sanity"] = checks.get("current_sign_sanity")
+    result.metadata["semantic_sources"] = checks.get("semantic_sources")
+    result.metadata["step_cycle_semantics"] = checks.get("step_cycle_semantics")
 
     validation = validate(result.data, strict=strict)
     validation.issues.extend(sampling.validation_issues)
@@ -289,6 +301,7 @@ def convert(
     time_sampling_tolerance: float = 0.1,
     time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
+    current_sign_check: str = "none",
     report_path: str | Path | None = None,
     report_formats: tuple[str, ...] | list[str] | str | None = None,
     write_sidecars: bool = False,
@@ -319,6 +332,7 @@ def convert(
         time_sampling_tolerance=time_sampling_tolerance,
         time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
         detection_threshold=detection_threshold,
+        current_sign_check=current_sign_check,
         sheet=sheet,
     )
     output_path = Path(output_path)
@@ -375,6 +389,7 @@ def convert_neware_groups(
     time_sampling_interpolation: str = "linear",
     time_sampling_tolerance: float = 0.1,
     time_sampling_max_inserted_rows: int = 100_000,
+    current_sign_check: str = "none",
     write_sidecars: bool = True,
     target: str = "bds",
 ) -> list[ConversionReport]:
@@ -419,6 +434,16 @@ def convert_neware_groups(
             result.metadata["repair_operations"] = repair_operations
         result.metadata["time_sampling"] = sampling.metadata
         result.metadata["output_rows"] = result.data.height
+        checks = quality_checks(
+            result.data,
+            provenance=result.provenance,
+            current_sign=current_sign,
+            current_sign_check=current_sign_check,
+        )
+        result.metadata["current_sign_confidence"] = checks.get("current_sign_confidence")
+        result.metadata["current_sign_sanity"] = checks.get("current_sign_sanity")
+        result.metadata["semantic_sources"] = checks.get("semantic_sources")
+        result.metadata["step_cycle_semantics"] = checks.get("step_cycle_semantics")
         validation = validate(result.data, strict=strict)
         validation.issues.extend(sampling.validation_issues)
         if strict and not validation.valid:
@@ -487,6 +512,7 @@ def batch_convert(
     time_sampling_tolerance: float = 0.1,
     time_sampling_max_inserted_rows: int = 100_000,
     detection_threshold: float = 0.1,
+    current_sign_check: str = "none",
     write_sidecars: bool = False,
     sheet: str | int | None = None,
     excel_sheets: str = "auto",
@@ -529,6 +555,7 @@ def batch_convert(
                         time_sampling_tolerance=time_sampling_tolerance,
                         time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
                         detection_threshold=detection_threshold,
+                        current_sign_check=current_sign_check,
                         write_sidecars=write_sidecars,
                         sheet=sheet,
                         excel_sheets=excel_sheets,
@@ -815,6 +842,7 @@ def _batch_convert_one(
     time_sampling_tolerance: float,
     time_sampling_max_inserted_rows: int,
     detection_threshold: float,
+    current_sign_check: str,
     write_sidecars: bool,
     sheet: str | int | None,
     excel_sheets: str,
@@ -887,6 +915,7 @@ def _batch_convert_one(
             time_sampling_tolerance=time_sampling_tolerance,
             time_sampling_max_inserted_rows=time_sampling_max_inserted_rows,
             detection_threshold=detection_threshold,
+            current_sign_check=current_sign_check,
             write_sidecars=write_sidecars,
             sheet=sheet_value,
             target=target,

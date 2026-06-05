@@ -30,6 +30,7 @@ read(
     time_sampling_interpolation="linear",
     time_sampling_tolerance=0.1,
     detection_threshold=0.1,
+    current_sign_check="none",
     sheet=None,
 )
 ```
@@ -72,6 +73,13 @@ inserts missing samples only when a fixed interval is detected or supplied. Use
 or set `time_sampling_interval_s=1`, `2`, `10`, or another protocol interval.
 The default interpolation method is `time_sampling_interpolation="linear"`.
 
+`current_sign_check="adjacent"` runs an optional conservative O(n) sanity check that
+compares adjacent voltage changes with the current direction when
+`current_sign` is `charge-positive` or `discharge-positive`. Use
+`current_sign_check="none"` to skip this check. The default is `none` so large
+files and heuristic-free workflows do not pay the extra scan cost unless they
+ask for it.
+
 ### `read_with_report`
 
 ```python
@@ -101,6 +109,7 @@ convert(
     time_sampling_interpolation="linear",
     time_sampling_tolerance=0.1,
     detection_threshold=0.1,
+    current_sign_check="none",
     report_path=None,
     report_formats=None,
     write_sidecars=False,
@@ -196,6 +205,7 @@ batch_convert(
     time_sampling_interpolation="linear",
     time_sampling_tolerance=0.1,
     detection_threshold=0.1,
+    current_sign_check="none",
     write_sidecars=False,
     sheet=None,
     excel_sheets="auto",
@@ -380,6 +390,12 @@ Time-sampling findings are stored in `metadata["time_sampling"]` when the
 time-series path is used. The record includes policy, expected interval,
 interval confidence, missing sample count, gap locations, interpolation method,
 and inserted row count when repair is applied.
+
+Current-sign and step/cycle sanity findings are stored in
+`metadata["current_sign_sanity"]`, `metadata["current_sign_confidence"]`,
+`metadata["semantic_sources"]`, and `metadata["step_cycle_semantics"]`. These
+records are conservative diagnostics; they warn about trust-affecting ambiguity
+but do not automatically change scientific semantics.
 
 ### `ValidationReport`
 

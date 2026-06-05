@@ -30,6 +30,10 @@ class ExplainReport:
     unit_transforms: list[dict[str, Any]] = field(default_factory=list)
     current_sign: str | None = None
     current_sign_evidence: str | None = None
+    current_sign_confidence: str | None = None
+    current_sign_sanity: dict[str, Any] | None = None
+    semantic_sources: dict[str, Any] | None = None
+    step_cycle_semantics: dict[str, Any] | None = None
     repair_policy: str = "warn"
     validation: dict[str, Any] | None = None
     warnings: list[str] = field(default_factory=list)
@@ -60,6 +64,10 @@ class ExplainReport:
             lines.append(f"Current sign: {self.current_sign}")
         if self.current_sign_evidence:
             lines.append(f"Current sign evidence: {self.current_sign_evidence}")
+        if self.current_sign_confidence:
+            lines.append(f"Current sign confidence: {self.current_sign_confidence}")
+        if self.current_sign_sanity and self.current_sign_sanity.get("status") == "suspicious":
+            lines.append(f"Current sign warning: {self.current_sign_sanity.get('reason')}")
         if self.validation:
             lines.append(f"Validation valid: {self.validation.get('valid')}")
         if self.time_sampling:
@@ -99,6 +107,7 @@ def explain(
     cycler: str | None = "auto",
     profile: str | Path | dict[str, Any] | None = None,
     current_sign: str = "charge-positive",
+    current_sign_check: str = "none",
     repair_policy: str = "warn",
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
@@ -140,6 +149,7 @@ def explain(
             strict=False,
             keep_raw=False,
             current_sign=current_sign,
+            current_sign_check=current_sign_check,
             repair_policy=repair_policy,
             detection_threshold=detection_threshold,
             sheet=sheet,
@@ -164,6 +174,10 @@ def explain(
             unit_transforms=_unit_transforms(report.provenance),
             current_sign=report.current_sign,
             current_sign_evidence=current_sign_evidence,
+            current_sign_confidence=report.metadata.get("current_sign_confidence"),
+            current_sign_sanity=report.metadata.get("current_sign_sanity"),
+            semantic_sources=report.metadata.get("semantic_sources"),
+            step_cycle_semantics=report.metadata.get("step_cycle_semantics"),
             repair_policy=repair_policy,
             validation=validation,
             warnings=report.warnings,
