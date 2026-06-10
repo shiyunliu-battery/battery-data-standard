@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- No unreleased changes yet.
+
+## 0.3.0 - 2026-06-10
+
 - Added Repower and PEC public fixture coverage.
 - Added current-sign sanity and step/cycle semantic diagnostics to conversion
   metadata and audit reports.
