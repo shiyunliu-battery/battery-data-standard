@@ -1,7 +1,7 @@
 # Battery Data Standard
 
-[![PyPI 0.2.2](https://img.shields.io/badge/PyPI-0.2.2-blue.svg)](https://pypi.org/project/battery-data-standard/0.2.2/)
-[![Python >=3.10](https://img.shields.io/badge/Python-%3E%3D3.10-blue.svg)](https://pypi.org/project/battery-data-standard/0.2.2/)
+[![PyPI 0.3.1](https://img.shields.io/badge/PyPI-0.3.1-blue.svg)](https://pypi.org/project/battery-data-standard/0.3.1/)
+[![Python >=3.10](https://img.shields.io/badge/Python-%3E%3D3.10-blue.svg)](https://pypi.org/project/battery-data-standard/0.3.1/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Package](https://img.shields.io/badge/package-bds-blue.svg)](https://pypi.org/project/battery-data-standard/)
 

@@ -4,6 +4,11 @@
 
 - No unreleased changes yet.
 
+## 0.3.1 - 2026-06-10
+
+- Removed notebooks that contained local/private path outputs.
+- Updated release metadata and public version checks for the 0.3.1 release.
+
 ## 0.3.0 - 2026-06-10
 
 - Added Repower and PEC public fixture coverage.
