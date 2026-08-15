@@ -642,8 +642,7 @@ def test_inspect_combines_mapping_findings_and_safe_defaults():
 def test_inspect_reports_sampling_gaps_without_inserting_rows(tmp_path):
     raw = tmp_path / "gaps.csv"
     original = (
-        "Test Time (s),Voltage (V),Current (A)\n"
-        "0,3.4,0.1\n1,3.5,0.1\n2,3.6,0.1\n4,3.7,0.1\n5,3.8,0.1\n"
+        "Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n1,3.5,0.1\n2,3.6,0.1\n4,3.7,0.1\n5,3.8,0.1\n"
     )
     raw.write_text(original, encoding="utf-8")
 
@@ -672,8 +671,7 @@ def test_inspect_caps_json_findings():
 def test_cli_inspect_prints_text_and_writes_bounded_json_report(tmp_path):
     raw = tmp_path / "raw.csv"
     raw.write_text(
-        "Test Time (s),Voltage (V),Current (A)\n"
-        "0,3.4,0.1\n1,3.5,0.1\n2,3.6,0.1\n4,3.7,0.1\n5,3.8,0.1\n",
+        "Test Time (s),Voltage (V),Current (A)\n0,3.4,0.1\n1,3.5,0.1\n2,3.6,0.1\n4,3.7,0.1\n5,3.8,0.1\n",
         encoding="utf-8",
     )
     json_path = tmp_path / "inspect.json"

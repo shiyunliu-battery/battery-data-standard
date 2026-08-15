@@ -262,9 +262,7 @@ def _missing_required_columns_from_dicts(issues: list[dict[str, Any]]) -> list[s
     )
 
 
-def _findings(
-    validation_issues: list[dict[str, Any]], warnings: list[str]
-) -> list[dict[str, Any]]:
+def _findings(validation_issues: list[dict[str, Any]], warnings: list[str]) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     seen_messages: set[str] = set()
     for issue in validation_issues:
