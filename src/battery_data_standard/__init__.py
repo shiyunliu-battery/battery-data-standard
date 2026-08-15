@@ -31,12 +31,15 @@ from .exceptions import (
     ValidationFailed,
 )
 from .export import to_export_frame
+from .inspection import InspectionReport, inspect
 from .reporting import (
     render_explain_html,
     write_conversion_report,
     write_conversion_reports,
     write_explain_report,
     write_explain_reports,
+    write_inspection_report,
+    write_inspection_reports,
 )
 from .reports import ConversionReport, DetectionResult, ValidationReport
 from .schema import BDF_SCHEMA_VERSION, BDS_SCHEMA_VERSION
@@ -56,6 +59,7 @@ __all__ = [
     "DetectionError",
     "DoctorReport",
     "ExplainReport",
+    "InspectionReport",
     "FileIOError",
     "UnsupportedFeatureError",
     "UnsupportedFormatError",
@@ -73,6 +77,7 @@ __all__ = [
     "doctor",
     "explain",
     "group_neware_files",
+    "inspect",
     "list_export_targets",
     "list_supported_formats",
     "read",
@@ -87,6 +92,8 @@ __all__ = [
     "validate_eis",
     "write_explain_report",
     "write_explain_reports",
+    "write_inspection_report",
+    "write_inspection_reports",
     "write_conversion_report",
     "write_conversion_reports",
 ]

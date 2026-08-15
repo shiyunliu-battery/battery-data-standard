@@ -32,7 +32,8 @@ from .exceptions import (
     ValidationFailed,
 )
 from .export import EXPORT_TARGET_IDS
-from .reporting import write_explain_report
+from .inspection import inspect as inspect_file
+from .reporting import write_explain_report, write_inspection_report
 from .schema import BDS_SCHEMA_VERSION, schema_dict
 from .time_sampling import TIME_SAMPLING_INTERPOLATION_METHODS, TIME_SAMPLING_POLICIES
 
@@ -122,6 +123,55 @@ def main(argv: list[str] | None = None) -> int:
     explain_parser.add_argument("--html", help="Write a polished user-facing HTML report.")
     explain_parser.add_argument("--xlsx", help="Write a polished user-facing Excel workbook report.")
     explain_parser.add_argument("--pdf", help="Write a polished user-facing PDF report.")
+
+    inspect_parser = subparsers.add_parser(
+        "inspect", help="Inspect detection, mapping, risks, and next steps without writing data"
+    )
+    inspect_parser.add_argument("file")
+    inspect_parser.add_argument("--cycler", default="auto")
+    inspect_parser.add_argument("--detect-threshold", type=float, default=0.1)
+    inspect_parser.add_argument(
+        "--mapping-profile",
+        "--profile",
+        dest="profile",
+        help="JSON/YAML column-mapping profile. --profile is kept as a short alias.",
+    )
+    inspect_parser.add_argument("--sheet")
+    inspect_parser.add_argument(
+        "--target",
+        choices=EXPORT_TARGET_IDS,
+        default="bds",
+        help="Target used for the mapping preview; this does not run conformance checks.",
+    )
+    inspect_parser.add_argument(
+        "--current-sign",
+        choices=("preserve", "discharge-positive", "charge-positive"),
+        default="preserve",
+        help="Current-sign convention used for the in-memory preview. Default preserves source values.",
+    )
+    inspect_parser.add_argument(
+        "--current-sign-check",
+        choices=("adjacent", "none"),
+        default="none",
+        help="How to run current-sign sanity checks.",
+    )
+    inspect_parser.add_argument(
+        "--repair-policy",
+        choices=("none", "warn"),
+        default="none",
+        help="Inspect repairable issues without applying repairs. The inspect command never accepts repair.",
+    )
+    inspect_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Format printed to stdout.",
+    )
+    inspect_parser.add_argument(
+        "--output",
+        action="append",
+        help="Write a JSON, HTML, XLSX, or PDF report. Repeat for multiple outputs.",
+    )
 
     convert_parser = subparsers.add_parser("convert", help="Convert raw cycler data to normalized data")
     convert_parser.add_argument("input")
@@ -342,6 +392,29 @@ def main(argv: list[str] | None = None) -> int:
                 if report_path:
                     write_explain_report(explain_report, report_path)
             print(explain_report.to_text() if args.text else explain_report.to_json())
+        elif args.command == "inspect":
+            inspection_report = inspect_file(
+                args.file,
+                cycler=args.cycler,
+                profile=args.profile,
+                current_sign=args.current_sign,
+                current_sign_check=args.current_sign_check,
+                repair_policy=args.repair_policy,
+                detection_threshold=args.detect_threshold,
+                sheet=args.sheet,
+                target=args.target,
+            )
+            for report_path in args.output or []:
+                write_inspection_report(inspection_report, report_path)
+            print(
+                inspection_report.to_json()
+                if args.format == "json"
+                else inspection_report.to_text()
+            )
+            if inspection_report.inspection_status == "unsupported":
+                return EXIT_UNSUPPORTED
+            if inspection_report.inspection_status == "failed":
+                return EXIT_ERROR
         elif args.command == "convert":
             report = convert(
                 args.input,

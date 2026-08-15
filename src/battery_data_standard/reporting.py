@@ -42,6 +42,31 @@ def write_explain_report(report: Any, path: str | Path) -> Path:
     return output_path
 
 
+def write_inspection_report(report: Any, path: str | Path) -> Path:
+    """Write one inspection report, inferring the format from the extension."""
+    output_path = Path(path)
+    suffix = output_path.suffix.lower().lstrip(".")
+    if suffix not in REPORT_FORMATS:
+        raise UnsupportedFormatError(
+            f"Unsupported inspection report format '{suffix}'. "
+            f"Supported formats: {', '.join(REPORT_FORMATS)}."
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _report_dict(report)
+    if suffix == "json":
+        write_json(output_path, payload)
+        return output_path
+
+    rendered = _inspection_report_payload(payload)
+    if suffix == "html":
+        output_path.write_text(render_explain_html(rendered), encoding="utf-8")
+    elif suffix == "xlsx":
+        _write_explain_xlsx(rendered, output_path)
+    elif suffix == "pdf":
+        _write_explain_pdf(rendered, output_path)
+    return output_path
+
+
 def write_conversion_report(report: Any, path: str | Path) -> Path:
     """Write one conversion report using the file extension as the format."""
     output_path = Path(path)
@@ -82,6 +107,26 @@ def write_explain_reports(
         normalized = fmt.lower().lstrip(".")
         path = output_root / f"{report_stem}.report.{normalized}"
         outputs[normalized] = str(write_explain_report(payload, path))
+    return outputs
+
+
+def write_inspection_reports(
+    report: Any,
+    output_dir: str | Path,
+    *,
+    stem: str | None = None,
+    formats: tuple[str, ...] | list[str] = ("json", "html"),
+) -> dict[str, str]:
+    """Write a set of inspection reports and return paths keyed by format."""
+    payload = _report_dict(report)
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    report_stem = _safe_stem(stem or Path(str(payload.get("input_path") or "bds_inspect")).stem)
+    outputs: dict[str, str] = {}
+    for fmt in formats:
+        normalized = fmt.lower().lstrip(".")
+        path = output_root / f"{report_stem}.inspect.{normalized}"
+        outputs[normalized] = str(write_inspection_report(payload, path))
     return outputs
 
 
@@ -153,6 +198,45 @@ def conversion_report_payload(report: Any) -> dict[str, Any]:
         if not validation.get("valid")
         else "The converted file is ready for downstream analysis after review of warnings and provenance.",
         "time_sampling": metadata.get("time_sampling"),
+    }
+
+
+def _inspection_report_payload(report: Any) -> dict[str, Any]:
+    """Adapt an ``InspectionReport`` dictionary to the existing rich renderer."""
+    payload = _report_dict(report)
+    attention = str(payload.get("attention") or "none")
+    inspection_status = str(payload.get("inspection_status") or "failed")
+    if inspection_status == "unsupported":
+        render_status = "unsupported"
+    elif inspection_status == "failed":
+        render_status = "error"
+    elif attention == "none":
+        render_status = "ok"
+    else:
+        render_status = "converted-with-issues"
+
+    findings = payload.get("findings") or []
+    warnings = [
+        str(item.get("message") or "")
+        for item in findings
+        if item.get("severity") in {"review", "blocking"}
+    ]
+    actions = payload.get("suggested_actions") or []
+    target = payload.get("target") or {}
+    target_assessment = str(target.get("assessment") or "")
+    return {
+        **payload,
+        "report_title": "BDS Inspection Report",
+        "status": render_status,
+        "export_columns": payload.get("target_columns") or [],
+        "warnings": warnings,
+        "recommended_next_action": " ".join(str(action) for action in actions),
+        "repair_policy": payload.get("repair_policy"),
+        "target_note": (
+            f"{target.get('id')} mapping preview only; not a conformance result."
+            if target.get("id") and target_assessment == "mapping-preview"
+            else ""
+        ),
     }
 
 

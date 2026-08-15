@@ -1,16 +1,25 @@
 # Battery Data Standard
 
+**Inspect, diagnose, and convert battery cycler data locally.**
+
 [![PyPI 0.3.1](https://img.shields.io/badge/PyPI-0.3.1-blue.svg)](https://pypi.org/project/battery-data-standard/0.3.1/)
 [![Python >=3.10](https://img.shields.io/badge/Python-%3E%3D3.10-blue.svg)](https://pypi.org/project/battery-data-standard/0.3.1/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Package](https://img.shields.io/badge/package-bds-blue.svg)](https://pypi.org/project/battery-data-standard/)
 
-`battery-data-standard` is a local Python library and command-line tool for
-turning battery cycler exports into validated, analysis-ready CSV or Parquet
-outputs with auditable conversion reports. It is intended for laboratories,
-battery test teams, and data pipelines that need a repeatable private path from
-vendor files to downstream tools such as DuckDB, Polars, PyBaMM, PyProBE,
-cellpy, BEEP, and Battery Archive-style workflows.
+`battery-data-standard` (BDS) is an open-source command-line tool and Python
+library for working with battery cycler exports.
+
+BDS detects file formats, explains column and unit mappings, identifies
+time-axis and current-sign risks, reports unsupported fields, and converts
+supported data to CSV or Parquet for downstream workflows.
+
+```bash
+bds inspect raw_export.csv
+```
+
+Inspection is local and non-mutating. It does not modify the source file,
+insert missing samples, or silently change current values.
 
 The package is vendor-neutral and independent. It is not certified by any cycler
 vendor or standards body. Adapter support describes behavior implemented and
@@ -42,26 +51,26 @@ import battery_data_standard as bds
 import bds
 ```
 
-## Scope
+## Features
 
-The package provides:
+The package can:
 
-- conversion of supported battery cycler time-series exports to standardized CSV or
-  Parquet files;
-- conversion of supported EIS tables to a standardized EIS table;
-- cycler detection, data-kind detection, validation, conversion reports, and
-  batch manifests;
-- single-file diagnostics that explain detection, mapping, current-sign
-  evidence, repairs, validation, and recommended next actions;
-- intake audit reports with file-level conversion quality scores;
-- archive-aware batch conversion for directories, zip archives, and tar
-  archives;
-- optional profile files for lab-specific column naming.
+- inspect unfamiliar battery cycler files before conversion;
+- detect supported cycler and data formats;
+- explain column, unit, and current-sign mappings;
+- report missing fields, sampling gaps, and unmapped columns;
+- provide suggested next steps when a file cannot be processed cleanly;
+- convert supported time-series and EIS data to CSV or Parquet;
+- generate JSON, HTML, Excel, and PDF reports;
+- process directories, zip archives, and tar archives locally;
+- export staging data for BDF, PyProBE, PyBaMM, cellpy, BEEP, DuckDB, and
+  Polars workflows;
+- use optional column-mapping profiles for lab-specific headers.
 
 The package does not upload source data to an external service. It reads local
 files and writes local outputs.
 
-## Command-Line Usage
+## Quick Start
 
 Inspect the installed version:
 
@@ -69,17 +78,29 @@ Inspect the installed version:
 bds --version
 ```
 
-Detect a cycler export:
+Inspect an unfamiliar file:
+
+```bash
+bds inspect raw_export.csv
+```
+
+Preview mappings for a downstream target:
+
+```bash
+bds inspect raw_export.csv --target bdf --format json
+bds inspect raw_export.csv --target pyprobe
+```
+
+Write review reports:
+
+```bash
+bds inspect raw_export.csv --output inspect.json --output inspect.html
+```
+
+Detect only the likely cycler format:
 
 ```bash
 bds detect raw_export.csv
-```
-
-Explain how one file will be detected, mapped, validated, and exported:
-
-```bash
-bds explain raw_export.csv --text
-bds explain raw_export.csv --html report.html --xlsx report.xlsx --json report.json
 ```
 
 Convert a time-series file:
@@ -129,16 +150,12 @@ because they omit fields such as temperature or energy.
 Inspect runtime adapter metadata and the pinned schema:
 
 ```bash
-bds doctor raw_export.csv
 bds formats
 bds inspect-schema
 ```
 
-Use `bds doctor` when a file fails or when you need a short troubleshooting
-report with adapter candidates, missing required columns, suspicious headers,
-suggested next steps, and a minimum anonymized fixture checklist. `bds formats`
-also reports each adapter's support tier and evidence tier so users can tell
-whether support is backed by public fixtures or unit tests.
+`bds formats` reports each adapter's support tier and evidence tier so users can
+tell whether support is backed by public fixtures or unit tests.
 
 ## Python API
 
@@ -228,10 +245,12 @@ steps = bds.summarize_steps(df)
 cycles = bds.summarize_cycles(df)
 ```
 
-## Output Model
+## Internal Normalized Model and Export Targets
 
-The converter standardizes supported cycler exports into a BDS time-series
-table. Every successful default export contains three required fields:
+The converter uses an internal BDS time-series table as an implementation
+contract for parsing and export. It is not presented as a universal
+scientific-data quality guarantee. Every successful default export contains
+three required fields:
 
 | Field | Unit | Description |
 | --- | --- | --- |
@@ -281,7 +300,7 @@ report = bds.convert_eis("impedance.csv", "normalized.eis.csv")
 time-series files, EIS files, including Gamry `.DTA` ZCURVE files, and
 unsupported helper files.
 
-## Profiles
+## Column-Mapping Profiles
 
 Profiles map lab-specific column names to canonical column names. JSON profiles
 are supported by the base installation. YAML profiles require the `yaml` extra.

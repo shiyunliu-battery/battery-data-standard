@@ -231,6 +231,40 @@ Archives are expanded into temporary storage. Supported archive suffixes are
 
 ## Intake Audit
 
+### `inspect`
+
+```python
+report = bds.inspect(
+    "raw_export.csv",
+    cycler="auto",
+    target="bdf",
+)
+```
+
+Returns a unified `InspectionReport` without writing converted data. Inspection
+defaults to preserving source current values, applying no repairs, and warning
+about time-sampling gaps without inserting rows. It combines detection,
+mapping, validation findings, suspicious headers, unmapped columns, and
+suggested actions. Target output is explicitly a mapping preview rather than a
+conformance result.
+
+The equivalent CLI is:
+
+```bash
+bds inspect raw_export.csv
+bds inspect raw_export.csv --target bdf --format json
+bds inspect raw_export.csv --output inspect.json --output inspect.html
+```
+
+Python callers can write multiple formats with:
+
+```python
+bds.write_inspection_reports(report, "reports", formats=("json", "html", "xlsx"))
+```
+
+Inspection JSON stores aggregate findings and representative sampling-gap
+windows, not source data rows.
+
 ### `doctor`
 
 ```python

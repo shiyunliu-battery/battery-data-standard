@@ -616,6 +616,101 @@ def test_explain_successful_file_reports_mapping_and_next_action():
     assert "bds convert" in payload["recommended_next_action"]
 
 
+def test_inspect_combines_mapping_findings_and_safe_defaults():
+    source = Path(__file__).parent / "fixtures" / "neware" / "flat.csv"
+
+    report = bds.inspect(source, target="bdf")
+    payload = report.to_dict()
+
+    assert payload["report_version"] == "bds-inspection-v1"
+    assert payload["inspection_status"] == "completed"
+    assert payload["readable"] is True
+    assert payload["target"] == {
+        "id": "bdf",
+        "assessment": "mapping-preview",
+        "conformant": None,
+    }
+    assert payload["current_sign"] == "preserve"
+    assert payload["repair_policy"] == "none"
+    assert payload["time_sampling_policy"] == "warn"
+    assert payload["source_file_modified"] is False
+    assert payload["repairs_applied"] is False
+    assert any(item["canonical_column"] == "test_time_s" for item in payload["column_mapping"])
+    assert payload["findings_total"] == len(payload["findings"])
+
+
+def test_inspect_reports_sampling_gaps_without_inserting_rows(tmp_path):
+    raw = tmp_path / "gaps.csv"
+    original = (
+        "Test Time (s),Voltage (V),Current (A)\n"
+        "0,3.4,0.1\n1,3.5,0.1\n2,3.6,0.1\n4,3.7,0.1\n5,3.8,0.1\n"
+    )
+    raw.write_text(original, encoding="utf-8")
+
+    report = bds.inspect(raw, cycler="generic")
+    payload = report.to_dict()
+
+    assert payload["time_sampling"]["status"] == "gaps-detected"
+    assert payload["time_sampling"]["missing_points"] == 1
+    assert payload["time_sampling"]["original_rows"] == 5
+    assert payload["time_sampling"]["output_rows"] == 5
+    assert any(item["code"] == "missing-sample-timepoints" for item in payload["findings"])
+    assert payload["repairs_applied"] is False
+    assert raw.read_text(encoding="utf-8") == original
+
+
+def test_inspect_caps_json_findings():
+    source = Path(__file__).parent / "fixtures" / "neware" / "flat.csv"
+
+    payload = bds.inspect(source, max_findings=2).to_dict()
+
+    assert len(payload["findings"]) == 2
+    assert payload["findings_total"] > len(payload["findings"])
+    assert payload["findings_truncated"] is True
+
+
+def test_cli_inspect_prints_text_and_writes_bounded_json_report(tmp_path):
+    raw = tmp_path / "raw.csv"
+    raw.write_text(
+        "Test Time (s),Voltage (V),Current (A)\n"
+        "0,3.4,0.1\n1,3.5,0.1\n2,3.6,0.1\n4,3.7,0.1\n5,3.8,0.1\n",
+        encoding="utf-8",
+    )
+    json_path = tmp_path / "inspect.json"
+    html_path = tmp_path / "inspect.html"
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
+
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "battery_data_standard.cli",
+            "inspect",
+            str(raw),
+            "--cycler",
+            "generic",
+            "--target",
+            "bdf",
+            "--output",
+            str(json_path),
+            "--output",
+            str(html_path),
+        ],
+        text=True,
+        capture_output=True,
+        env=env,
+        check=True,
+    )
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+
+    assert "BDS inspect" in run.stdout
+    assert payload["inspection_status"] == "completed"
+    assert payload["target"]["assessment"] == "mapping-preview"
+    assert payload["time_sampling"]["output_rows"] == 5
+    assert json_path.stat().st_size < 100_000
+    assert "BDS Inspection Report" in html_path.read_text(encoding="utf-8")
+
+
 def test_explain_report_writes_polished_html_json_and_xlsx(tmp_path):
     from openpyxl import load_workbook
 
