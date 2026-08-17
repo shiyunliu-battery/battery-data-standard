@@ -47,6 +47,7 @@ and a short import alias:
 
 ```python
 import battery_data_standard as bds
+
 # or
 import bds
 ```

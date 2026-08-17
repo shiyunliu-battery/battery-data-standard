@@ -406,11 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             for report_path in args.output or []:
                 write_inspection_report(inspection_report, report_path)
-            print(
-                inspection_report.to_json()
-                if args.format == "json"
-                else inspection_report.to_text()
-            )
+            print(inspection_report.to_json() if args.format == "json" else inspection_report.to_text())
             if inspection_report.inspection_status == "unsupported":
                 return EXIT_UNSUPPORTED
             if inspection_report.inspection_status == "failed":

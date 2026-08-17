@@ -5,6 +5,7 @@ the short alias package `bds`.
 
 ```python
 import battery_data_standard as bds
+
 # or
 import bds
 ```

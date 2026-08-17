@@ -217,9 +217,7 @@ def _inspection_report_payload(report: Any) -> dict[str, Any]:
 
     findings = payload.get("findings") or []
     warnings = [
-        str(item.get("message") or "")
-        for item in findings
-        if item.get("severity") in {"review", "blocking"}
+        str(item.get("message") or "") for item in findings if item.get("severity") in {"review", "blocking"}
     ]
     actions = payload.get("suggested_actions") or []
     target = payload.get("target") or {}
