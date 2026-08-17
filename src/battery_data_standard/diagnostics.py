@@ -113,6 +113,7 @@ def explain(
     current_sign: str = "charge-positive",
     current_sign_check: str = "none",
     repair_policy: str = "warn",
+    time_sampling_policy: str = "repair",
     detection_threshold: float = 0.1,
     sheet: str | int | None = None,
     target: str = "bds",
@@ -155,6 +156,7 @@ def explain(
             current_sign=current_sign,
             current_sign_check=current_sign_check,
             repair_policy=repair_policy,
+            time_sampling_policy=time_sampling_policy,
             detection_threshold=detection_threshold,
             sheet=sheet,
         )

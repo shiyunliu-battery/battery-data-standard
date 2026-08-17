@@ -3,7 +3,41 @@
 BDS diagnostics are meant to answer the question: "What did the converter think
 this file was, and what would it do to the data?"
 
-## Single-File Explain
+## Single-File Inspection
+
+Use `bds inspect` as the default entry point for an unfamiliar or failing file:
+
+```bash
+bds inspect raw_export.csv
+bds inspect raw_export.csv --target bdf --format json
+bds inspect raw_export.csv --output report.json --output report.html
+```
+
+Inspection combines adapter candidates, missing columns, suspicious headers,
+source-to-canonical-to-target mapping, unit transforms, current-sign evidence,
+time-sampling findings, unmapped columns, and suggested next steps. The source
+file is never changed. Inspection defaults to `current_sign="preserve"`,
+`repair_policy="none"`, and `time_sampling_policy="warn"`, so missing samples
+are reported but not inserted.
+
+`--target` only previews output labels and mappings. It does not claim that the
+artifact conforms to BDF or is accepted by another downstream tool.
+
+JSON inspection reports are summaries, not row dumps. Findings are capped at
+500 entries, time-sampling gaps at 50 representative intervals, and truncation
+is explicit in `findings_total`, `findings_truncated`, and `gaps_truncated`.
+
+Python callers use the same path:
+
+```python
+import bds
+
+report = bds.inspect("raw_export.csv", target="bdf")
+print(report.to_text())
+bds.write_inspection_reports(report, "reports", formats=("json", "html"))
+```
+
+## Compatibility Diagnostics
 
 Use `bds doctor` when a file fails to import or when you need a compact
 troubleshooting checklist rather than a full mapping report:
@@ -17,7 +51,7 @@ Doctor reports include data-kind detection, adapter candidates, missing
 required columns, suspicious headers, suggested `--cycler`/`--sheet`/profile
 next steps, and the minimum anonymized fixture checklist.
 
-Use `bds explain` before conversion when a file is new, private, or failing:
+Existing workflows can continue to use `bds explain`:
 
 ```bash
 bds explain raw_export.csv
@@ -133,7 +167,7 @@ coverage is reported separately under `completeness`.
 
 ## Recommended Workflow
 
-1. Run `bds explain` on one representative file.
+1. Run `bds inspect` on one representative file.
 2. Review mapping, units, current sign evidence, and validation issues.
 3. Run `bds convert --report auto` once the diagnostic looks right.
 4. Run `bds audit` on the whole folder before batch conversion.

@@ -3,6 +3,12 @@
 BDS reports are machine-readable. Production pipelines should branch on
 `valid`, `status`, and issue `code` values rather than parsing message text.
 
+`bds inspect` carries validation codes into its `findings` list. Older
+unstructured adapter warnings use the fallback code `conversion-warning`; its
+message is explanatory text and is not a stable machine-readable subtype.
+Inspection reports expose `findings_total` and `findings_truncated` so pipelines
+can distinguish a complete finding list from the default bounded summary.
+
 ## Validation Codes
 
 Common validation issue codes include:

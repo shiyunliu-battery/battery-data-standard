@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-- No unreleased changes yet.
+- Added the unified `bds inspect` command and `bds.inspect()` API for
+  non-mutating single-file detection, mapping, validation findings, and next
+  steps.
+- Added bounded inspection findings plus JSON, HTML, Excel, and PDF inspection
+  report writers. Target output is explicitly labeled as a mapping preview, not
+  a conformance result.
+- Kept `doctor` and `explain` behavior and public APIs compatible.
 
 ## 0.3.1 - 2026-06-10
 
